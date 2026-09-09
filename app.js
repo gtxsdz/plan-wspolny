@@ -45,7 +45,14 @@ function applyClassBranding() {
   if (h1) h1.textContent = CLASS_CONFIG.heading;
   if (wych) wych.textContent = CLASS_CONFIG.teacher;
   const art = document.getElementById('sheetArt');
-  if (art) art.style.display = CLASS_CONFIG.showArt ? '' : 'none';
+  if (art) {
+    if (CLASS_CONFIG.showArt && CLASS_CONFIG.artSvg) {
+      art.innerHTML = CLASS_CONFIG.artSvg;
+      art.style.display = '';
+    } else {
+      art.style.display = 'none';
+    }
+  }
   // Naglowek gotowy - odslaniamy (byl ukryty, by nie migac placeholderem)
   const header = document.getElementById('pageHeader');
   if (header) header.classList.remove('header-loading');

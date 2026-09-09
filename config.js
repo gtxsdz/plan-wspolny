@@ -12,7 +12,24 @@ const CLASS_5A = {
   title: 'Plan Lekcji Klasy 5a',
   heading: 'PLAN LEKCJI KLASY 5a',
   teacher: 'Wychowawca: mgr Monika Olejniczak',
-  showArt: false,
+  showArt: true,
+  // Ozdobniki dla klasy podstawowej: kolorowe kredki, gwiazdki, jabłko, chmurki - w rogach arkusza
+  artSvg: `
+    <g transform="translate(14,10) rotate(-32)">
+      <rect x="0" y="0" width="120" height="14" rx="3" fill="#ff6b6b"/><polygon points="120,0 138,7 120,14" fill="#ffd36b"/><polygon points="131,3.5 138,7 131,10.5" fill="#5a3d1e"/>
+      <rect x="0" y="18" width="120" height="14" rx="3" fill="#4ea1ff"/><polygon points="120,18 138,25 120,32" fill="#ffd36b"/><polygon points="131,21.5 138,25 131,28.5" fill="#5a3d1e"/>
+      <rect x="0" y="36" width="120" height="14" rx="3" fill="#5ac77a"/><polygon points="120,36 138,43 120,50" fill="#ffd36b"/><polygon points="131,39.5 138,43 131,46.5" fill="#5a3d1e"/>
+    </g>
+    <g transform="translate(1090,60)" fill="#ffcf3f" stroke="#e6a417" stroke-width="2" stroke-linejoin="round">
+      <polygon points="40,0 50,28 80,28 55,46 65,76 40,58 15,76 25,46 0,28 30,28"/>
+    </g>
+    <g transform="translate(1040,690)">
+      <circle cx="30" cy="30" r="26" fill="#ff7a7a"/><path d="M30 8 q6 -10 14 -4 q-6 2 -8 8" fill="#5ac77a"/><ellipse cx="22" cy="24" rx="5" ry="7" fill="#fff" opacity=".5"/>
+    </g>
+    <g transform="translate(70,700)" fill="#ffffff" stroke="#cde3f5" stroke-width="2">
+      <ellipse cx="34" cy="34" rx="34" ry="20"/><ellipse cx="60" cy="30" rx="26" ry="18"/>
+    </g>
+    <g transform="translate(560,4)" fill="#ffb84d"><circle cx="0" cy="0" r="6"/><circle cx="26" cy="10" r="4"/><circle cx="-24" cy="9" r="4"/></g>`,
   firebaseConfig: {
     apiKey: "AIzaSyAcf3E50EtPo1kUWs2ybUT8mWzVtWqlSqY",
     authDomain: "plan-e5ce7.firebaseapp.com",
@@ -59,6 +76,22 @@ const CLASS_4TA = {
   heading: 'PLAN LEKCJI KLASY 4Ta',
   teacher: 'Wychowawca: mgr Dorota Łajs',
   showArt: true,
+  // Ozdobniki dla technikum (profil architektoniczny): ekierka, cyrkiel, linijka, ołówek techniczny
+  artSvg: `
+    <g transform="translate(20,14) rotate(-6)" fill="none" stroke="#5a3d1e" stroke-width="3" stroke-linejoin="round">
+      <polygon points="0,0 132,0 0,96" fill="#e3c481" fill-opacity=".55"/>
+      <line x1="16" y1="0" x2="16" y2="12"/><line x1="34" y1="0" x2="34" y2="12"/><line x1="52" y1="0" x2="52" y2="12"/><line x1="70" y1="0" x2="70" y2="12"/><line x1="88" y1="0" x2="88" y2="12"/><line x1="106" y1="0" x2="106" y2="12"/>
+    </g>
+    <g transform="translate(1085,40)" stroke="#5a3d1e" stroke-width="4" stroke-linecap="round" fill="none">
+      <circle cx="30" cy="8" r="6" fill="#c9a55f"/><line x1="30" y1="14" x2="8" y2="78"/><line x1="30" y1="14" x2="52" y2="78"/><line x1="26" y1="52" x2="34" y2="52"/><polygon points="4,78 12,78 8,90" fill="#5a3d1e" stroke="none"/>
+    </g>
+    <g transform="translate(950,700) rotate(20)">
+      <rect x="0" y="0" width="150" height="26" rx="2" fill="#f0dcae" stroke="#c9a55f" stroke-width="2"/>
+      <g stroke="#8a6c40" stroke-width="2"><line x1="18" y1="0" x2="18" y2="10"/><line x1="36" y1="0" x2="36" y2="14"/><line x1="54" y1="0" x2="54" y2="10"/><line x1="72" y1="0" x2="72" y2="14"/><line x1="90" y1="0" x2="90" y2="10"/><line x1="108" y1="0" x2="108" y2="14"/><line x1="126" y1="0" x2="126" y2="10"/></g>
+    </g>
+    <g transform="translate(40,690) rotate(-28)">
+      <rect x="0" y="0" width="150" height="16" rx="2" fill="#ffcf3f"/><rect x="0" y="0" width="24" height="16" fill="#d98b3a"/><polygon points="150,0 172,8 150,16" fill="#f4c07a"/><polygon points="165,4.5 172,8 165,11.5" fill="#3a2a12"/>
+    </g>`,
   firebaseConfig: {
     // Firebase Web API key - not a secret, required client-side for Firebase SDK
     apiKey: "AIzaSyDJkIBARaAn0Q9SOyoM46nfUk2GIocHDPU", // gitleaks:allow
