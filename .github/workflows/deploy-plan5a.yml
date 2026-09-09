@@ -1,4 +1,4 @@
-# Deploy wspólnego kodu na hosting klasy 5a (projekt plan-e5ce7 -> plan5a.web.app)
+# Deploy wspólnego kodu na hosting klasy 5a (projekt plan-e5ce7 -> site plan5a -> plan5a.web.app)
 name: Deploy plan5a on merge
 on:
   push:
@@ -15,3 +15,4 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PLAN_E5CE7 }}
           channelId: live
           projectId: plan-e5ce7
+          target: plan5a

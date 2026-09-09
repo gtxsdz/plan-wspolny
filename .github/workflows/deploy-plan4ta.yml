@@ -1,4 +1,4 @@
-# Deploy wspólnego kodu na hosting klasy 4Ta (projekt plan4ta -> plan4ta.web.app)
+# Deploy wspólnego kodu na hosting klasy 4Ta (projekt plan4ta -> site plan4ta -> plan4ta.web.app)
 name: Deploy plan4ta on merge
 on:
   push:
@@ -15,3 +15,4 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PLAN4TA }}
           channelId: live
           projectId: plan4ta
+          target: plan4ta

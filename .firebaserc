@@ -3,5 +3,21 @@
     "default": "plan-e5ce7",
     "plan5a": "plan-e5ce7",
     "plan4ta": "plan4ta"
+  },
+  "targets": {
+    "plan-e5ce7": {
+      "hosting": {
+        "plan5a": [
+          "plan5a"
+        ]
+      }
+    },
+    "plan4ta": {
+      "hosting": {
+        "plan4ta": [
+          "plan4ta"
+        ]
+      }
+    }
   }
 }
