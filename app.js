@@ -1,9 +1,22 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getDatabase, ref, get, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { CLASS_CONFIG } from './config.js';
 
 // --- Dane z konfiguracji wybranej klasy ---
-const db = getDatabase(initializeApp(CLASS_CONFIG.firebaseConfig));
+const app = initializeApp(CLASS_CONFIG.firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+// Logowanie anonimowe - potrzebne, by reguły bazy pozwoliły na zapis (write: auth != null).
+// Jest w pełni niewidoczne dla użytkownika (dzieje się automatycznie przy starcie).
+async function ensureAuth() {
+  try {
+    if (!auth.currentUser) await signInAnonymously(auth);
+  } catch (e) {
+    console.warn('Nie udało się zalogować anonimowo:', e.message);
+  }
+}
 const SUBJECT_MAP = CLASS_CONFIG.subjectMap;
 const SUBJECT_OPTIONS = CLASS_CONFIG.subjectOptions;
 const TIMES = CLASS_CONFIG.times;
@@ -68,6 +81,7 @@ async function loadData() {
 }
 
 async function saveData(data) {
+  await ensureAuth();
   daysData = data;
   await set(ref(db, 'schedule/days'), data.map(d => ({ lessons: d.lessons })));
 }
@@ -295,6 +309,7 @@ function setupPasswordChangeUI() {
     }
 
     try {
+      await ensureAuth();
       const newHash = await sha256(p1);
       await set(ref(db, 'adminHash'), newHash);
       currentAdminHash = newHash;
@@ -507,6 +522,7 @@ function collectForm() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   applyClassBranding();
+  ensureAuth();          // logowanie anonimowe w tle (nie blokuje renderu)
   await loadData();
   setupEvents();
   setInterval(updateStatus, 10000);

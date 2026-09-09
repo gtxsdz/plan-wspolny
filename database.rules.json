@@ -1,0 +1,14 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": "auth != null",
+    "schedule": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "adminHash": {
+      ".read": true,
+      ".write": "auth != null"
+    }
+  }
+}
