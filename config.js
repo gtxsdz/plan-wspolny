@@ -10,7 +10,7 @@
 const CLASS_5A = {
   id: '5a',
   title: 'Plan Lekcji Klasy 5a',
-  heading: 'PLAN LEKCJI KLASY Va',
+  heading: 'PLAN LEKCJI KLASY 5a',
   teacher: 'Wychowawca: mgr Monika Olejniczak',
   showArt: false,
   firebaseConfig: {
