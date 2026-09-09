@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan lekcji</title>
+  <link rel="stylesheet" href="styles.css?v=2.0">
+</head>
+<body>
+  <div class="sheet">
+    <svg id="sheetArt" class="art" viewBox="0 0 1180 780" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(10,8)"><g transform="rotate(-38)"><rect x="0" y="0" width="130" height="17" rx="3" fill="#ff6b6b"/><rect x="0" y="0" width="26" height="17" fill="#ffd36b"/><polygon points="130,0 150,8.5 130,17" fill="#f4c07a"/><polygon points="141,4 150,8.5 141,13" fill="#5a3d1e"/></g></g>
+    </svg>
+
+    <div class="content">
+      <header>
+        <h1 id="classHeading">PLAN LEKCJI</h1>
+        <div class="wych" id="classTeacher"></div>
+      </header>
+
+      <div class="mobile-tabs" id="mobileTabs"></div>
+
+      <table id="scheduleTable">
+        <thead>
+          <tr>
+            <th class="timo">Godz.</th>
+            <th>Poniedziałek</th>
+            <th>Wtorek</th>
+            <th>Środa</th>
+            <th>Czwartek</th>
+            <th>Piątek</th>
+          </tr>
+        </thead>
+        <tbody id="desktopTbody"></tbody>
+      </table>
+
+      <div class="mobile-schedule" id="mobileSchedule"></div>
+
+      <div class="bottom-bar">
+        <button type="button" id="themeToggle" class="theme-toggle-btn">🌙 Tryb ciemny</button>
+        <button type="button" id="editBtn" class="edit-btn">✏️ Edytuj plan</button>
+        <button type="button" id="adminLogoutBtn" class="admin-logout-btn">🔒 Wyloguj</button>
+        <button type="button" id="adminLoginBtn" class="admin-login-btn">🔑 Admin</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL LOGOWANIA -->
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+      <h3>🔑 Panel administratora</h3>
+      <input type="password" id="adminPasswordInput" placeholder="Hasło administratora" autocomplete="current-password"/>
+      <div class="login-error" id="loginError">Błędne hasło. Spróbuj ponownie.</div>
+      <button type="button" class="btn-do-login" id="btnDoLogin">Zaloguj</button>
+      <button type="button" class="btn-login-cancel" id="btnLoginCancel">Anuluj</button>
+    </div>
+  </div>
+
+  <!-- MODAL EDYCJI -->
+  <div class="edit-overlay" id="editOverlay">
+    <div class="edit-box">
+      <button type="button" class="edit-close" id="editClose" aria-label="Zamknij">✕</button>
+      <h2>✏️ Edycja planu lekcji</h2>
+      <div class="edit-tabs" id="editTabs"></div>
+      <div id="editDayPanels"></div>
+      <div class="modal-actions">
+        <div class="save-status" id="saveStatus"></div>
+        <button type="button" class="btn-cancel" id="btnCancel">Anuluj</button>
+        <button type="button" class="btn-save" id="btnSave">💾 Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js?v=2.0"></script>
+</body>
+</html>
