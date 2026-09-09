@@ -46,6 +46,9 @@ function applyClassBranding() {
   if (wych) wych.textContent = CLASS_CONFIG.teacher;
   const art = document.getElementById('sheetArt');
   if (art) art.style.display = CLASS_CONFIG.showArt ? '' : 'none';
+  // Naglowek gotowy - odslaniamy (byl ukryty, by nie migac placeholderem)
+  const header = document.getElementById('pageHeader');
+  if (header) header.classList.remove('header-loading');
 }
 
 async function sha256(msg) {

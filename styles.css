@@ -76,6 +76,8 @@ body.dark-mode .art { opacity: .35; }
 
 /* HEADER & BUTTONS */
 header { text-align: center; margin: 0 0 16px; }
+/* Ukrywa naglowek do czasu ustawienia nazwy klasy przez JS - eliminuje blysk placeholdera */
+header.header-loading { visibility: hidden; }
 header h1 { margin: 0; font-size: 36px; color: var(--text-header); letter-spacing: 1px; }
 header .wych { font-size: 15px; color: var(--text-muted); margin-top: 6px; }
 
@@ -254,6 +256,13 @@ body.dark-mode .empty { background: rgba(40,42,58,.6); border-color: #44475a; }
 .edit-tab-btn.active { background: var(--bg-btn); color: var(--text-btn); }
 .edit-day-panel { display: none; } .edit-day-panel.active { display: block; }
 .edit-lesson-row { display: grid; grid-template-columns: 28px 28px 1fr 90px 32px; gap: 8px; align-items: center; margin-bottom: 8px; padding: 6px; border-radius: 8px; background: rgba(0,0,0,.03); }
+/* Na mobile: chowamy podglad ikony i zwezamy kolumny, by nazwa przedmiotu miala wiecej miejsca */
+@media(max-width: 768px) {
+  .edit-lesson-row { grid-template-columns: 22px 1fr 62px 30px; gap: 6px; padding: 5px; }
+  .edit-lesson-row .icon-preview { display: none; }
+  .edit-lesson-row select.es, .edit-lesson-row input.er { padding: 8px 6px; font-size: 13px; }
+  .edit-box { max-width: 100%; padding: 18px 14px; }
+}
 .empty-toggle { width: 32px; height: 32px; border-radius: 7px; border: 2px solid var(--border-input); background: var(--bg-input); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .empty-toggle.toggled { background: #ffe0e8; border-color: #e0a0b0; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
