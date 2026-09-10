@@ -131,6 +131,8 @@ thead th {
   background: var(--bg-th); border: 2px solid var(--border-th);
   border-radius: 10px; padding: 9px 4px; box-shadow: 0 2px 3px rgba(0,0,0,.15);
 }
+thead th .dh-name { display: block; }
+thead th .dh-time { display: block; font-size: 10px; font-weight: 700; color: var(--text-muted); margin-top: 2px; white-space: nowrap; }
 th.timo { width: 58px; }
 td.nr { text-align: center; }
 td.nr .num {
@@ -231,6 +233,7 @@ body.dark-mode .empty { background: rgba(40,42,58,.6); border-color: #44475a; }
 
 .day-card { margin-bottom: 14px; background: var(--bg-sheet); border-radius: 14px; border: 2px solid var(--border-sheet); overflow: hidden; }
 .day-header { background: var(--bg-th); padding: 10px; font-weight: bold; font-size: 15px; color: var(--text-header); border-bottom: 2px solid var(--border-th); text-align: center; }
+.day-header .dh-time { display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 700; color: var(--text-muted); }
 .lessons-container { padding: 10px; }
 .lesson-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-start; }
 .lesson-time { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 10px; background: var(--bg-num); border: 2px solid var(--border-banner); padding: 4px; font-size: 11px; color: var(--text-main); text-align: center; }

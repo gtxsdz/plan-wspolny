@@ -107,9 +107,41 @@ function getWarsawTime() {
   return { day: new Date(parts.year, parts.month - 1, parts.day, h, parts.minute).getDay(), mins: h * 60 + parts.minute };
 }
 
+// Zwraca zakres godzinowy dnia (od startu 1. lekcji do konca ostatniej), np. "8:00–13:35".
+// Liczony dynamicznie z faktycznych lekcji - pomija puste sloty na poczatku i koncu dnia.
+// Dla dnia bez lekcji zwraca pusty string.
+function dayTimeRange(day) {
+  const idx = day.lessons
+    .map((l, i) => ({ l, i }))
+    .filter(x => x.l && !x.l.empty)
+    .map(x => x.i);
+  if (!idx.length) return '';
+  const first = TIMES[idx[0]];
+  const last = TIMES[idx[idx.length - 1]];
+  const start = first.dTime.split('–')[0];
+  const end = last.dTime.split('–')[1];
+  return `${start}–${end}`;
+}
+
+function renderDesktopHead() {
+  const thead = document.getElementById('desktopThead');
+  if (!thead) return;
+  const tr = document.createElement('tr');
+  tr.innerHTML = '<th class="timo">Godz.</th>';
+  daysData.forEach(day => {
+    const range = dayTimeRange(day);
+    const th = document.createElement('th');
+    th.innerHTML = `<span class="dh-name">${day.name}</span>${range ? `<span class="dh-time">${range}</span>` : ''}`;
+    tr.appendChild(th);
+  });
+  thead.innerHTML = '';
+  thead.appendChild(tr);
+}
+
 function renderDesktop() {
   const tbody = document.getElementById('desktopTbody');
   tbody.innerHTML = '';
+  renderDesktopHead();
   TIMES.forEach((slot, li) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td class="nr"><span class="num"><span class="bell">🔔</span><span class="no">${slot.num}</span><span class="time">${slot.time}</span></span></td>`;
@@ -135,7 +167,8 @@ function renderMobile() {
     const card = document.createElement('div');
     card.className = `day-card ${day.mobileClass}`;
     card.dataset.day = day.dayNum;
-    card.innerHTML = `<div class="day-header">${day.name}</div>`;
+    const range = dayTimeRange(day);
+    card.innerHTML = `<div class="day-header">${day.name}${range ? `<span class="dh-time">${range}</span>` : ''}</div>`;
     const lc = document.createElement('div');
     lc.className = 'lessons-container';
     day.lessons.forEach((l, li) => {
