@@ -109,7 +109,7 @@ const CLASS_4TA = {
     'r_matematyka': '📐', 'fizyka': '⚛️', 'chemia': '🧫',
     'wf': '🏃', 'religia': '🙏', 'zaj. z wychowawcą': '💬',
     'ob. małej arch.': '🏗️', 'proj. ob. arch.': '📐', 'prace w ob. arch.': '🔧',
-    'j. ang. w arch.': '🌿', 'j. niemiecki': '🇩🇪'
+    'j. ang. w arch.': '🌿', 'j. niemiecki': '🗣️'
   },
   subjectOptions: [
     'matematyka', 'r_matematyka', 'j. polski', 'j. angielski',
@@ -150,7 +150,7 @@ const CLASS_4TA = {
       { icon: '🔢', name: 'matematyka',      room: '106' },
       { icon: '🏃', name: 'wf',              room: 'wf3' },
       { icon: '🏃', name: 'wf',              room: 'wf1' },
-      { icon: '🇩🇪', name: 'j. niemiecki',    room: '47'  }
+      { icon: '🗣️', name: 'j. niemiecki',    room: '47'  }
     ],
     // Środa
     [
