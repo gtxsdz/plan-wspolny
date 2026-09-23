@@ -53,6 +53,20 @@ function applyClassBranding() {
       art.style.display = 'none';
     }
   }
+  // Link do drugiego planu (dyskretna strzalka w rogu)
+  const link = document.getElementById('otherPlanLink');
+  if (link && CLASS_CONFIG.other) {
+    const o = CLASS_CONFIG.other;
+    // Jesli klasa wymuszona przez ?klasa= (tryb lokalny/testowy) - przelaczamy parametr,
+    // w przeciwnym razie prowadzimy na wlasciwy adres drugiej klasy.
+    const forced = new URLSearchParams(window.location.search).get('klasa');
+    link.href = forced ? `?klasa=${o.id}` : o.url;
+    link.title = o.label;
+    const txt = link.querySelector('.opl-text');
+    if (txt) txt.textContent = o.label;
+    link.style.display = '';
+  }
+
   // Naglowek gotowy - odslaniamy (byl ukryty, by nie migac placeholderem)
   const header = document.getElementById('pageHeader');
   if (header) header.classList.remove('header-loading');

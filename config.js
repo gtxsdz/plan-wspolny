@@ -13,6 +13,8 @@ const CLASS_5A = {
   heading: 'PLAN LEKCJI KLASY 5a',
   teacher: 'Wychowawca: mgr Monika Olejniczak',
   showArt: true,
+  // Link do drugiego planu (dyskretna strzalka w rogu)
+  other: { id: '4ta', url: 'https://plan4ta.web.app/', label: 'Plan klasy 4Ta' },
   // Ozdobniki dla klasy podstawowej: kolorowe kredki, gwiazdki, jabłko, chmurki - w rogach arkusza
   artSvg: `
     <g transform="translate(14,10) rotate(-32)">
@@ -76,6 +78,8 @@ const CLASS_4TA = {
   heading: 'PLAN LEKCJI KLASY 4Ta',
   teacher: 'Wychowawca: mgr Dorota Łajs',
   showArt: true,
+  // Link do drugiego planu (dyskretna strzalka w rogu)
+  other: { id: '5a', url: 'https://plan5a.web.app/', label: 'Plan klasy 5a' },
   // Ozdobniki dla technikum (profil architektoniczny): ekierka, cyrkiel, linijka, ołówek techniczny
   artSvg: `
     <g transform="translate(20,14) rotate(-6)" fill="none" stroke="#5a3d1e" stroke-width="3" stroke-linejoin="round">
