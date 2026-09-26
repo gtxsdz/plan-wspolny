@@ -60,13 +60,13 @@ Push do `main` uruchamia dwa workflowy GitHub Actions:
 
 Każdy workflow przed publikacją uruchamia `npm run check` i `npm test`, a krok „Wdrożenie reguł Realtime Database” wykonuje `firebase deploy --only database`. Jeśli sekret service account nie istnieje, krok reguł jest pomijany (hosting nadal się wdroży).
 
-Ręcznie:
+Ręcznie (uwaga: `--only hosting` bez targetu próbuje wdrożyć oba targety i kończy się błędem, bo każdy projekt ma tylko jeden):
 
 ```bash
 firebase deploy --only database --project plan-e5ce7
-firebase deploy --only hosting  --project plan-e5ce7
+firebase deploy --only hosting:plan5a --project plan-e5ce7
 firebase deploy --only database --project plan4ta
-firebase deploy --only hosting  --project plan4ta
+firebase deploy --only hosting:plan4ta --project plan4ta
 ```
 
 ## Praca lokalna
