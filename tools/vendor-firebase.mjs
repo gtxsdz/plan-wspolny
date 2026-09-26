@@ -34,7 +34,12 @@ for (const name of FILES) {
     .replaceAll(`"${BASE}/`, '"./')
     .replaceAll(`'${BASE}/`, "'./")
     // sourceMappingURL wskazujacy na CDN usuwamy (mapy nie sa vendorowane)
-    .replace(/^\/\/# sourceMappingURL=.*$/gm, '');
+    .replace(/^\/\/# sourceMappingURL=.*$/gm, '')
+    // Uwaga: czesc plikow SDK (np. firebase-app.js) jest publikowana z CRLF.
+    // Normalizujemy do LF, zeby plik w repo byl identyczny z plikiem zapisanym
+    // przez to narzedzie (inaczej .gitattributes zamienia CRLF na LF i sumy
+    // SHA-256 z MANIFEST.json przestaja pasowac po klonie).
+    .replace(/\r\n/g, '\n');
 
   await writeFile(path.join(OUT_DIR, name), local, 'utf8');
 

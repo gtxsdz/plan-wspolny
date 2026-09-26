@@ -89,7 +89,7 @@ firebase emulators:exec --only database "npm test"
 - **Logika / wygląd (dotyczy obu klas):** `app.js`, `styles.css`, `index.html`.
 - **Dane jednej klasy (godziny, przedmioty, domyślny plan):** odpowiednia sekcja w `config.js` (`CLASS_5A` lub `CLASS_4TA`).
 - **Limit długości pola lekcji:** `LIMITS` w `lib/plan-utils.js` **oraz** `.validate` w `database.rules.json` — zmieniaj w obu miejscach (`npm test` pilnuje spójności).
-- **Nowa wersja SDK Firebase:** podnieś wersję w `tools/vendor-firebase.mjs` i uruchom `npm run vendor:firebase`.
+- **Nowa wersja SDK Firebase:** podnieś wersję w `tools/vendor-firebase.mjs` i uruchom `npm run vendor:firebase`. Narzędzie normalizuje końce linii do LF (część plików Google publikuje z CRLF) i aktualizuje `MANIFEST.json` sumami SHA-256 plików dokładnie w tej postaci, w jakiej są w repozytorium — dzięki temu sumy da się zweryfikować po klonie.
 
 ## Znane ograniczenia
 
