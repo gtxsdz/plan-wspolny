@@ -24,7 +24,11 @@ Kontrola dostępu jest realizowana po stronie serwera (reguły bazy w `database.
 ## Zalecane ustawienia w konsoli (poza repozytorium)
 
 1. **Authentication → Users:** trzymaj tylko konta administratorów; usuń konta, które nie są potrzebne.
-2. **Google Cloud → APIs & Services → Credentials:** ogranicz klucz web do HTTP referrers: `https://plan5a.web.app/*`, `https://plan4ta.web.app/*` oraz `http://localhost:8080/*` (praca lokalna).
+2. **Ograniczenia klucza web (skonfigurowane):** oba klucze mają restrykcje HTTP referrer:
+   - 5a: `https://plan5a.web.app/*`, `https://plan5a.firebaseapp.com/*`, `http://localhost/*`
+   - 4Ta: `https://plan4ta.web.app/*`, `https://plan4ta.firebaseapp.com/*`, `http://localhost/*`
+
+   Uwaga praktyczna: Google **ignoruje port** przy dopasowaniu referrera, dlatego dla pracy lokalnej poprawny wzorzec to `http://localhost/*` (wpis `http://localhost:8080/*` lub `http://localhost:*` nie zadziała). Zmiany restrykcji propagują się kilkanaście sekund.
 3. **App Check** (opcjonalnie): reCAPTCHA dla obu aplikacji — ogranicza nadużycia ruchu; nie zastępuje reguł autoryzacyjnych.
 4. **Realtime Database → Rules:** upewnij się, że wdrożone reguły są zgodne z `database.rules.json` (CI wdraża je przy każdym pushu do `main`).
 5. Usuń stare węzły `adminHash` i `daysData`.
