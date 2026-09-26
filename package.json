@@ -1,0 +1,15 @@
+{
+  "name": "plan-wspolny",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Wspolny plan lekcji klas 5a i 4Ta - jeden kod, rozpoznawanie klasy po adresie",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "node tools/check-syntax.mjs",
+    "vendor:firebase": "node tools/vendor-firebase.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
