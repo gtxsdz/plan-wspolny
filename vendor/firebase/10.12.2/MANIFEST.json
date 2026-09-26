@@ -1,0 +1,22 @@
+{
+  "version": "10.12.2",
+  "source": "https://www.gstatic.com/firebasejs/10.12.2",
+  "generatedAt": "2026-09-26T15:09:34.853Z",
+  "files": {
+    "firebase-app.js": {
+      "bytes": 101599,
+      "sha256": "f1e324f25ca89159151d2ca260d0686e7ddc04e279542457ea9e34b7dc315edb",
+      "upstreamSha256": "08b83f02859328aabb9acea9370d600ffe739d9e2c251b6668b6f6ff56a2e1d1"
+    },
+    "firebase-database.js": {
+      "bytes": 186213,
+      "sha256": "9f80e5da3900fa9f1593c54908464de10bb0e72a20cbe43d480bb692492c037f",
+      "upstreamSha256": "8609d30b5b601ec20a2960d0db73819717b7aac002b9308aee3197e7ecb9fa81"
+    },
+    "firebase-auth.js": {
+      "bytes": 150914,
+      "sha256": "36185d11170c1110964d49dcf638cdf5f2622981dbbb3fd61526651e95aaab79",
+      "upstreamSha256": "9b2ebba6ffced4657e12300f4187d53c8fc1762e98188e5e2005407a86e926b6"
+    }
+  }
+}
