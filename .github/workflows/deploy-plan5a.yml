@@ -28,7 +28,7 @@ jobs:
     steps:
       # Akcje przypiete do commita (a nie do mutowalnego tagu)
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
 
@@ -37,15 +37,9 @@ jobs:
           npm run check
           npm test
 
-      # Reguly bazy z repo -> projekt (inaczej plik regul bylby tylko dokumentacja)
-      - name: Wdrozenie regul Realtime Database
-        if: env.FIREBASE_SA != ''
-        run: |
-          npm install -g firebase-tools
-          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
-          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
-          firebase deploy --only database --project plan-e5ce7 --non-interactive
-
+      # Kolejnosc ma znaczenie: najpierw publikujemy aplikacje, a dopiero potem
+      # reguly bazy. Ewentualny blad wdrozenia regul (np. brak uprawnien IAM
+      # konta serwisowego) nie blokuje wtedy publikacji nowej wersji serwisu.
       - name: Publikacja hostingu
         uses: FirebaseExtended/action-hosting-deploy@500ac625ca2dd40cbd15f7659af953801858032a # v0
         with:
@@ -54,3 +48,11 @@ jobs:
           channelId: live
           projectId: plan-e5ce7
           target: plan5a
+
+      - name: Wdrozenie regul Realtime Database
+        if: env.FIREBASE_SA != ''
+        run: |
+          npm install -g firebase-tools
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          firebase deploy --only database --project plan-e5ce7 --non-interactive
