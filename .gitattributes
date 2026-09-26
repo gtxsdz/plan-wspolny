@@ -1,0 +1,14 @@
+# Stabilne konce linii w calym repo: pliki na dysku i w repo zawsze LF.
+# Dzieki temu sumy SHA-256 w vendor/firebase/*/MANIFEST.json sa zgodne
+# niezaleznie od systemu (Windows/Linux/macOS, CI).
+* text=auto eol=lf
+
+# Pliki binarne bez konwersji (na wypadek dodania grafik w przyszlosci)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
