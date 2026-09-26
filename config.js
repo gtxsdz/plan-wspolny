@@ -7,7 +7,7 @@
 // ============================================================================
 
 // --- Definicja klasy 5a --------------------------------------------------
-const CLASS_5A = {
+export const CLASS_5A = {
   id: '5a',
   title: 'Plan Lekcji Klasy 5a',
   heading: 'PLAN LEKCJI KLASY 5a',
@@ -33,7 +33,9 @@ const CLASS_5A = {
     </g>
     <g transform="translate(560,4)" fill="#ffb84d"><circle cx="0" cy="0" r="6"/><circle cx="26" cy="10" r="4"/><circle cx="-24" cy="9" r="4"/></g>`,
   firebaseConfig: {
-    apiKey: "AIzaSyAcf3E50EtPo1kUWs2ybUT8mWzVtWqlSqY",
+    // Firebase Web API key - nie jest sekretem, ale warto ograniczyc klucz do
+    // wlasciwych domen (Google Cloud -> APIs & Services -> Credentials)
+    apiKey: "AIzaSyAcf3E50EtPo1kUWs2ybUT8mWzVtWqlSqY", // gitleaks:allow
     authDomain: "plan-e5ce7.firebaseapp.com",
     databaseURL: "https://plan-e5ce7-default-rtdb.europe-west1.firebasedatabase.app",
     projectId: "plan-e5ce7",
@@ -72,7 +74,7 @@ const CLASS_5A = {
 };
 
 // --- Definicja klasy 4Ta -------------------------------------------------
-const CLASS_4TA = {
+export const CLASS_4TA = {
   id: '4ta',
   title: 'Plan lekcji klasy 4Ta',
   heading: 'PLAN LEKCJI KLASY 4Ta',
@@ -194,18 +196,27 @@ const CLASS_4TA = {
 };
 
 // --- Wybór aktywnej klasy ------------------------------------------------
-function resolveActiveClass() {
-  const params = new URLSearchParams(window.location.search);
-  const forced = (params.get('klasa') || '').toLowerCase();
-  if (forced === '5a') return CLASS_5A;
-  if (forced === '4ta') return CLASS_4TA;
+// Czysta funkcja wyboru klasy (testowana w tests/config.test.js):
+// parametr ?klasa= ma pierwszenstwo nad adresem, domyslnie 5a.
+export function pickClassId(forced, hostname) {
+  const want = String(forced || '').toLowerCase();
+  if (want === '5a') return '5a';
+  if (want === '4ta') return '4ta';
 
-  const host = window.location.hostname.toLowerCase();
-  if (host.includes('plan4ta')) return CLASS_4TA;
-  if (host.includes('plan5a')) return CLASS_5A;
+  const host = String(hostname || '').toLowerCase();
+  if (host.includes('plan4ta')) return '4ta';
+  if (host.includes('plan5a')) return '5a';
 
   // Domyślnie (np. localhost / nieznany adres) -> 5a
-  return CLASS_5A;
+  return '5a';
+}
+
+function resolveActiveClass() {
+  // typeof window - pozwala importować config.js w testach (Node bez DOM)
+  const search = typeof window !== 'undefined' ? window.location.search : '';
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const forced = new URLSearchParams(search).get('klasa');
+  return pickClassId(forced, hostname) === '4ta' ? CLASS_4TA : CLASS_5A;
 }
 
 export const CLASS_CONFIG = resolveActiveClass();

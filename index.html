@@ -3,14 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Plan lekcji klasy - godziny, przedmioty, sale oraz informacja o bieżącej i najbliższej lekcji.">
+  <meta name="theme-color" content="#e8dcc3">
   <title>Plan lekcji</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%93%85%3C/text%3E%3C/svg%3E">
 </head>
 <body>
   <div class="sheet">
     <svg id="sheetArt" class="art" viewBox="0 0 1180 780" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg>
 
     <div class="content">
+      <div class="app-notice" id="appNotice" role="status" hidden></div>
+      <noscript><div class="app-notice err">Ten plan lekcji wymaga włączonej obsługi JavaScript.</div></noscript>
+
       <a id="otherPlanLink" class="other-plan-link" href="#" title="" style="display:none;">
         <span class="opl-text"></span><span class="opl-arrow">→</span>
       </a>
@@ -37,12 +43,13 @@
     </div>
   </div>
 
-  <!-- MODAL LOGOWANIA -->
+  <!-- MODAL LOGOWANIA (konto administratora z Firebase Authentication) -->
   <div class="login-overlay" id="loginOverlay">
     <div class="login-box">
       <h3>🔑 Panel administratora</h3>
+      <input type="email" id="adminEmailInput" placeholder="E-mail administratora" autocomplete="username" spellcheck="false"/>
       <input type="password" id="adminPasswordInput" placeholder="Hasło administratora" autocomplete="current-password"/>
-      <div class="login-error" id="loginError">Błędne hasło. Spróbuj ponownie.</div>
+      <div class="login-error" id="loginError">Błędny e-mail lub hasło.</div>
       <button type="button" class="btn-do-login" id="btnDoLogin">Zaloguj</button>
       <button type="button" class="btn-login-cancel" id="btnLoginCancel">Anuluj</button>
     </div>
@@ -63,6 +70,8 @@
     </div>
   </div>
 
+  <!-- boot-fallback.js: komunikat awaryjny, gdy app.js sie nie uruchomi -->
+  <script src="boot-fallback.js" defer></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

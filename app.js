@@ -1,29 +1,45 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getDatabase, ref, get, set } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
-import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+// ============================================================================
+//  app.js - wspolna logika planu lekcji (klasy 5a i 4Ta)
+//
+//  Klasa wybierana jest w config.js (po adresie hosta albo parametrem ?klasa=).
+//  Zapis do bazy ma wylacznie zalogowany administrator z wpisem w node
+//  "admins" (patrz database.rules.json). Dane z bazy sa escapowane (esc()).
+// ============================================================================
+
+import { initializeApp } from './vendor/firebase/10.12.2/firebase-app.js';
+import { getDatabase, ref, get, update, onValue } from './vendor/firebase/10.12.2/firebase-database.js';
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from './vendor/firebase/10.12.2/firebase-auth.js';
 import { CLASS_CONFIG } from './config.js';
+import {
+  esc,
+  normalizeLesson,
+  mergeDays,
+  dayTimeRange,
+  subjectOptionsFor,
+  activeBadge,
+  nextBadge,
+  saveErrorMessage,
+  authErrorMessage,
+  LIMITS,
+  EMPTY_ICON,
+  FALLBACK_ICON
+} from './lib/plan-utils.js';
 
 // --- Dane z konfiguracji wybranej klasy ---
 const app = initializeApp(CLASS_CONFIG.firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
 
-// Logowanie anonimowe - potrzebne, by reguły bazy pozwoliły na zapis (write: auth != null).
-// Jest w pełni niewidoczne dla użytkownika (dzieje się automatycznie przy starcie).
-async function ensureAuth() {
-  try {
-    if (!auth.currentUser) await signInAnonymously(auth);
-  } catch (e) {
-    console.warn('Nie udało się zalogować anonimowo:', e.message);
-  }
-}
+const CLASS_ID = CLASS_CONFIG.id;
 const SUBJECT_MAP = CLASS_CONFIG.subjectMap;
 const SUBJECT_OPTIONS = CLASS_CONFIG.subjectOptions;
 const TIMES = CLASS_CONFIG.times;
 const DEFAULT_LESSONS = CLASS_CONFIG.defaultLessons;
-
-const DEFAULT_ADMIN_HASH = '9b9819c6a8980b8f602b4ce44561545564acfe44fd5ff6623bedf2f31de277e9';
-let currentAdminHash = DEFAULT_ADMIN_HASH;
 
 const DAY_META = [
   { dayNum: 1, mobileClass: 'day-pon', colClass: 'col-pon', name: 'Poniedziałek', shortName: 'Pon' },
@@ -33,9 +49,31 @@ const DAY_META = [
   { dayNum: 5, mobileClass: 'day-pt',  colClass: 'col-pt',  name: 'Piątek',      shortName: 'Pt'  }
 ];
 
-let daysData = DAY_META.map((m, i) => ({ ...m, lessons: DEFAULT_LESSONS[i].map(l => ({ ...l })) }));
+// Klucze localStorage osobne per klasa (5a i 4Ta nie nadpisuja sobie cache)
+const CACHE_KEY = `plan_${CLASS_ID}_offline`;
+const THEME_KEY = 'schedule_theme';
+
+let daysData = mergeDays(DAY_META, DEFAULT_LESSONS, null, TIMES, SUBJECT_MAP).days;
 let isAdmin = false;
 let activeSubject = null;
+let noticeSource = null;
+
+// Komunikaty dla uzytkownika wystawia boot-fallback.js (dziala takze wtedy,
+// gdy app.js w ogole sie nie uruchomi).
+function planNotice(message, isError) {
+  if (typeof window.planNotice === 'function') window.planNotice(message, isError);
+}
+
+function showNotice(message, source, isError) {
+  noticeSource = source;
+  planNotice(message, isError);
+}
+
+function clearNotice(source) {
+  if (noticeSource !== source) return;
+  noticeSource = null;
+  planNotice('');
+}
 
 // Ustaw tytuł strony, nagłówek i wychowawcę na podstawie konfiguracji klasy
 function applyClassBranding() {
@@ -47,6 +85,7 @@ function applyClassBranding() {
   const art = document.getElementById('sheetArt');
   if (art) {
     if (CLASS_CONFIG.showArt && CLASS_CONFIG.artSvg) {
+      // artSvg to statyczna grafika z config.js (nie dane uzytkownika)
       art.innerHTML = CLASS_CONFIG.artSvg;
       art.style.display = '';
     } else {
@@ -72,42 +111,79 @@ function applyClassBranding() {
   if (header) header.classList.remove('header-loading');
 }
 
-async function sha256(msg) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+// --- Plan offline w localStorage (awaryjnie, gdy brak sieci) ---------------
+function cacheSchedule(days) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      at: Date.now(),
+      days: days.map(d => ({ lessons: d.lessons }))
+    }));
+  } catch (e) {
+    // brak miejsca albo tryb prywatny - cache pomijamy
+  }
 }
 
-async function loadData() {
+function readCache() {
   try {
-    const snap = await get(ref(db, 'schedule/days'));
-    if (snap.exists()) {
-      const fb = snap.val();
-      daysData = DAY_META.map((m, i) => ({
-        ...m,
-        // Merge per-slot: braki w bazie uzupełniamy domyślnym planem
-        lessons: (fb[i] && fb[i].lessons)
-          ? DEFAULT_LESSONS[i].map((def, li) =>
-              (fb[i].lessons[li] !== undefined) ? fb[i].lessons[li] : def
-            )
-          : DEFAULT_LESSONS[i].map(l => ({ ...l }))
-      }));
-    }
-    const hashSnap = await get(ref(db, 'adminHash'));
-    if (hashSnap.exists()) {
-      currentAdminHash = hashSnap.val();
-    }
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.days)) return null;
+    return parsed;
   } catch (e) {
-    console.warn('Błąd pobierania z Firebase:', e.message);
+    return null;
   }
+}
+
+function applyDays(fbDays, options = {}) {
+  const { days, warnings } = mergeDays(DAY_META, DEFAULT_LESSONS, fbDays, TIMES, SUBJECT_MAP);
+  daysData = days;
+  warnings.forEach(w => console.warn('[plan] ' + w));
+  if (!options.fromCache) cacheSchedule(days);
   renderDesktop();
   renderMobile();
   updateStatus();
 }
 
-async function saveData(data) {
-  await ensureAuth();
-  daysData = data;
-  await set(ref(db, 'schedule/days'), data.map(d => ({ lessons: d.lessons })));
+function showCachedPlan(reason) {
+  const cached = readCache();
+  if (!cached) {
+    showNotice('Nie udało się pobrać planu z bazy. Odśwież stronę albo spróbuj później.', 'data', true);
+    return;
+  }
+  applyDays(cached.days, { fromCache: true });
+  const when = new Date(cached.at).toLocaleString('pl-PL');
+  showNotice(`${reason} Pokazuję plan zapamiętany ${when}.`, 'data', true);
+}
+
+// Pierwszy odczyt przez get() (bez migniecia planu domyslnego), a potem onValue()
+// - dzieki temu zmiany wprowadzone przez innego administratora pojawiaja sie
+// na otwartej stronie bez odswiezania.
+async function initSchedule() {
+  try {
+    const snapshot = await get(ref(db, 'schedule/days'));
+    clearNotice('data');
+    applyDays(snapshot.val());
+  } catch (err) {
+    console.warn('Błąd pobierania z Firebase:', err.message);
+    showCachedPlan('Brak połączenia z bazą planu.');
+    return;
+  }
+
+  onValue(ref(db, 'schedule/days'), snapshot => {
+    clearNotice('data');
+    applyDays(snapshot.val());
+  }, err => {
+    console.warn('Błąd nasłuchu zmian w Firebase:', err.message);
+    showCachedPlan('Utracono połączenie z bazą planu.');
+  });
+}
+
+// --- Renderowanie ----------------------------------------------------------
+// Klucz przedmiotu do podswietlania i porownan (dane z bazy sa escapowane przy
+// wstawianiu do HTML, takze w atrybutach).
+function subjectKey(lesson) {
+  return String(lesson?.name || '').toLowerCase().trim();
 }
 
 function getWarsawTime() {
@@ -121,31 +197,15 @@ function getWarsawTime() {
   return { day: new Date(parts.year, parts.month - 1, parts.day, h, parts.minute).getDay(), mins: h * 60 + parts.minute };
 }
 
-// Zwraca zakres godzinowy dnia (od startu 1. lekcji do konca ostatniej), np. "8:00–13:35".
-// Liczony dynamicznie z faktycznych lekcji - pomija puste sloty na poczatku i koncu dnia.
-// Dla dnia bez lekcji zwraca pusty string.
-function dayTimeRange(day) {
-  const idx = day.lessons
-    .map((l, i) => ({ l, i }))
-    .filter(x => x.l && !x.l.empty)
-    .map(x => x.i);
-  if (!idx.length) return '';
-  const first = TIMES[idx[0]];
-  const last = TIMES[idx[idx.length - 1]];
-  const start = first.dTime.split('–')[0];
-  const end = last.dTime.split('–')[1];
-  return `${start}–${end}`;
-}
-
 function renderDesktopHead() {
   const thead = document.getElementById('desktopThead');
   if (!thead) return;
   const tr = document.createElement('tr');
   tr.innerHTML = '<th class="timo">Godz.</th>';
   daysData.forEach(day => {
-    const range = dayTimeRange(day);
+    const range = dayTimeRange(day.lessons, TIMES);
     const th = document.createElement('th');
-    th.innerHTML = `<span class="dh-name">${day.name}</span>${range ? `<span class="dh-time">${range}</span>` : ''}`;
+    th.innerHTML = `<span class="dh-name">${esc(day.name)}</span>${range ? `<span class="dh-time">${esc(range)}</span>` : ''}`;
     tr.appendChild(th);
   });
   thead.innerHTML = '';
@@ -158,7 +218,7 @@ function renderDesktop() {
   renderDesktopHead();
   TIMES.forEach((slot, li) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td class="nr"><span class="num"><span class="bell">🔔</span><span class="no">${slot.num}</span><span class="time">${slot.time}</span></span></td>`;
+    tr.innerHTML = `<td class="nr"><span class="num"><span class="bell">🔔</span><span class="no">${esc(slot.num)}</span><span class="time">${esc(slot.time)}</span></span></td>`;
     daysData.forEach(day => {
       const td = document.createElement('td');
       td.className = `cell ${day.colClass}`;
@@ -166,7 +226,7 @@ function renderDesktop() {
       if (!l || l.empty) {
         td.innerHTML = `<div class="tile empty"><span class="txt"><span class="p">&mdash;</span></span></div>`;
       } else {
-        td.innerHTML = `<div class="tile" data-subject="${l.name.toLowerCase().trim()}"><span class="ico">${l.icon}</span><span class="txt"><span class="p">${l.name}</span><span class="s">${l.room}</span></span></div>`;
+        td.innerHTML = `<div class="tile" data-subject="${esc(subjectKey(l))}" role="button" tabindex="0" aria-pressed="false"><span class="ico">${esc(l.icon)}</span><span class="txt"><span class="p">${esc(l.name)}</span><span class="s">${esc(l.room)}</span></span></div>`;
       }
       tr.appendChild(td);
     });
@@ -181,8 +241,8 @@ function renderMobile() {
     const card = document.createElement('div');
     card.className = `day-card ${day.mobileClass}`;
     card.dataset.day = day.dayNum;
-    const range = dayTimeRange(day);
-    card.innerHTML = `<div class="day-header">${day.name}${range ? `<span class="dh-time">${range}</span>` : ''}</div>`;
+    const range = dayTimeRange(day.lessons, TIMES);
+    card.innerHTML = `<div class="day-header">${esc(day.name)}${range ? `<span class="dh-time">${esc(range)}</span>` : ''}</div>`;
     const lc = document.createElement('div');
     lc.className = 'lessons-container';
     day.lessons.forEach((l, li) => {
@@ -193,9 +253,12 @@ function renderMobile() {
       row.dataset.lessonIndex = li;
       const info = document.createElement('div');
       info.className = 'lesson-info';
-      info.dataset.subject = l.name.toLowerCase().trim();
-      info.innerHTML = `<div class="lesson-content"><span class="lesson-icon">${l.icon}</span><div class="lesson-name">${l.name}</div><div class="lesson-room">${l.room}</div></div>`;
-      row.innerHTML = `<div class="lesson-time"><span class="bell">🔔</span><span class="no">${t.num}</span><span class="time">${t.dTime}</span></div>`;
+      info.dataset.subject = subjectKey(l);
+      info.setAttribute('role', 'button');
+      info.setAttribute('tabindex', '0');
+      info.setAttribute('aria-pressed', 'false');
+      info.innerHTML = `<div class="lesson-content"><span class="lesson-icon">${esc(l.icon)}</span><div class="lesson-name">${esc(l.name)}</div><div class="lesson-room">${esc(l.room)}</div></div>`;
+      row.innerHTML = `<div class="lesson-time"><span class="bell">🔔</span><span class="no">${esc(t.num)}</span><span class="time">${esc(t.dTime)}</span></div>`;
       row.appendChild(info);
       lc.appendChild(row);
     });
@@ -229,7 +292,7 @@ function switchTab(n) {
   document.querySelectorAll('.day-card').forEach(c => c.classList.toggle('active-tab', +c.dataset.day === n));
 }
 
-// Pomocnik: dodaje klasę i data-badge do kafelka desktop i mobile dla danego slotu
+// Pomocnik: dodaje klase i data-badge do kafelka desktop i mobile dla danego slotu
 function markLesson(slotIndex, day, cssClass, badgeText) {
   const row = document.querySelectorAll('#desktopTbody tr')[slotIndex];
   if (row) {
@@ -276,11 +339,9 @@ function updateStatus() {
   }
 
   if (li !== -1) {
-    const minsLeft = TIMES[li].e - mins;
-    markLesson(li, day, 'active-lesson', `🔴 TERAZ (${minsLeft} min)`);
+    markLesson(li, day, 'active-lesson', activeBadge(TIMES[li].e - mins));
   } else if (isBreak && ni !== -1) {
-    const minsLeft = TIMES[ni].s - mins;
-    markLesson(ni, day, 'next-lesson', `⏳ za ${minsLeft} min`);
+    markLesson(ni, day, 'next-lesson', nextBadge(TIMES[ni].s - mins));
   }
   applyHighlight();
 }
@@ -290,114 +351,88 @@ function applyHighlight() {
     const empty = t.classList.contains('empty') || !!t.querySelector('.lesson-empty');
     if (!activeSubject) {
       t.classList.remove('dimmed', 'highlighted');
+      t.setAttribute('aria-pressed', 'false');
       return;
     }
-    if (!empty && t.dataset.subject === activeSubject) {
-      t.classList.add('highlighted');
-      t.classList.remove('dimmed');
-    } else {
-      t.classList.add('dimmed');
-      t.classList.remove('highlighted');
-    }
+    const match = !empty && t.dataset.subject === activeSubject;
+    t.classList.toggle('highlighted', match);
+    t.classList.toggle('dimmed', !match);
+    t.setAttribute('aria-pressed', String(match));
   });
 }
 
-function setupPasswordChangeUI() {
-  let passBtn = document.getElementById('changePassBtn');
-  if (!passBtn) {
-    passBtn = document.createElement('button');
-    passBtn.id = 'changePassBtn';
-    passBtn.className = 'change-pass-btn';
-    passBtn.textContent = '🔑 Zmień hasło';
-    const editBtn = document.getElementById('editBtn');
-    if (editBtn && editBtn.parentNode) {
-      editBtn.parentNode.insertBefore(passBtn, editBtn.nextSibling);
-    }
-  }
-
-  let passOverlay = document.getElementById('changePassOverlay');
-  if (!passOverlay) {
-    passOverlay = document.createElement('div');
-    passOverlay.id = 'changePassOverlay';
-    passOverlay.className = 'login-overlay';
-    passOverlay.innerHTML = `
-      <div class="login-box">
-        <h3>🔑 Zmiana hasła admina</h3>
-        <div class="login-error" id="passError"></div>
-        <input type="password" id="newPassInput" placeholder="Nowe hasło" style="margin-bottom:10px;">
-        <input type="password" id="confirmPassInput" placeholder="Powtórz nowe hasło" style="margin-bottom:14px;">
-        <button type="button" class="btn-do-login" id="btnSavePass">💾 Zapisz nowe hasło</button>
-        <button type="button" class="btn-login-cancel" id="btnCancelPass">Anuluj</button>
-      </div>
-    `;
-    document.body.appendChild(passOverlay);
-  }
-
-  passBtn.addEventListener('click', () => {
-    if (!isAdmin) return;
-    document.getElementById('newPassInput').value = '';
-    document.getElementById('confirmPassInput').value = '';
-    const errEl = document.getElementById('passError');
-    errEl.style.display = 'none';
-    errEl.style.color = '#c0392b';
-    passOverlay.classList.add('open');
-  });
-
-  document.getElementById('btnCancelPass').addEventListener('click', () => {
-    passOverlay.classList.remove('open');
-  });
-
-  document.getElementById('btnSavePass').addEventListener('click', async () => {
-    const p1 = document.getElementById('newPassInput').value.trim();
-    const p2 = document.getElementById('confirmPassInput').value.trim();
-    const errEl = document.getElementById('passError');
-
-    if (!p1 || p1.length < 4) {
-      errEl.textContent = 'Hasło musi mieć min. 4 znaki!';
-      errEl.style.color = '#c0392b';
-      errEl.style.display = 'block';
-      return;
-    }
-    if (p1 !== p2) {
-      errEl.textContent = 'Hasła nie są identyczne!';
-      errEl.style.color = '#c0392b';
-      errEl.style.display = 'block';
-      return;
-    }
-
-    try {
-      await ensureAuth();
-      const newHash = await sha256(p1);
-      await set(ref(db, 'adminHash'), newHash);
-      currentAdminHash = newHash;
-      errEl.style.color = '#2d6a4f';
-      errEl.textContent = '✅ Hasło zostało zmienione!';
-      errEl.style.display = 'block';
-      setTimeout(() => {
-        passOverlay.classList.remove('open');
-      }, 1200);
-    } catch (e) {
-      errEl.style.color = '#c0392b';
-      errEl.textContent = '⚠️ Błąd zapisu w bazie!';
-      errEl.style.display = 'block';
-    }
-  });
+function toggleSubjectHighlight(el) {
+  if (!el || el.classList.contains('empty') || el.querySelector('.lesson-empty')) return;
+  const key = el.dataset.subject;
+  if (!key) return;
+  activeSubject = activeSubject === key ? null : key;
+  applyHighlight();
 }
 
+// --- Zapis i tozsamosc administratora --------------------------------------
+async function saveData(data) {
+  const user = auth.currentUser;
+  if (!user) {
+    throw Object.assign(new Error('Brak zalogowanego administratora'), { code: 'NOT_AUTHENTICATED' });
+  }
+  // Zapis per dzien (zamiast nadpisywania calego drzewa) + metadane zmiany,
+  // zeby dalo sie wykryc, kto i kiedy zapisal plan.
+  const updates = { updatedAt: Date.now(), updatedBy: user.uid };
+  data.forEach((day, i) => {
+    updates[`days/${i}`] = { lessons: day.lessons.map(l => normalizeLesson(l, SUBJECT_MAP)) };
+  });
+  await update(ref(db, 'schedule'), updates);
+}
+
+// 'guest' (niezalogowany) | 'user' (zalogowany bez uprawnien) | 'admin'
+function setAdminUi(state) {
+  const loginBtn = document.getElementById('adminLoginBtn');
+  const editBtn = document.getElementById('editBtn');
+  const logoutBtn = document.getElementById('adminLogoutBtn');
+  if (loginBtn) loginBtn.style.display = state === 'guest' ? '' : 'none';
+  if (editBtn) editBtn.style.display = state === 'admin' ? 'inline-block' : 'none';
+  if (logoutBtn) logoutBtn.style.display = state === 'guest' ? 'none' : 'inline-block';
+}
+
+async function refreshAdminState(user) {
+  if (!user) {
+    isAdmin = false;
+    setAdminUi('guest');
+    return;
+  }
+  try {
+    const snapshot = await get(ref(db, `admins/${user.uid}`));
+    isAdmin = snapshot.exists();
+  } catch (e) {
+    isAdmin = false;
+    console.warn('Nie udało się sprawdzić uprawnień administratora:', e.message);
+  }
+  setAdminUi(isAdmin ? 'admin' : 'user');
+  if (isAdmin) {
+    clearNotice('auth');
+  } else {
+    showNotice('To konto nie ma uprawnień administratora tego planu.', 'auth', true);
+  }
+}
+
+// --- Zdarzenia -------------------------------------------------------------
 function setupEvents() {
-  // Podświetlanie przedmiotów
+  // Podswietlanie przedmiotow: mysz/dotyk oraz klawiatura (Enter/Spacja)
   document.addEventListener('click', e => {
     const t = e.target.closest('.tile,.lesson-info');
-    if (!t || t.classList.contains('empty') || t.querySelector('.lesson-empty')) return;
-    const s = t.dataset.subject;
-    if (!s) return;
-    activeSubject = activeSubject === s ? null : s;
-    applyHighlight();
+    if (t) toggleSubjectHighlight(t);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const t = e.target && e.target.closest ? e.target.closest('.tile,.lesson-info') : null;
+    if (!t) return;
+    e.preventDefault();
+    toggleSubjectHighlight(t);
   });
 
   // Przełączanie motywu
   const themeBtn = document.getElementById('themeToggle');
-  if (localStorage.getItem('schedule_theme') === 'dark') {
+  if (localStorage.getItem(THEME_KEY) === 'dark') {
     document.body.classList.add('dark-mode');
     themeBtn.textContent = '☀️ Tryb jasny';
   }
@@ -405,51 +440,67 @@ function setupEvents() {
     document.body.classList.toggle('dark-mode');
     const isDark = document.body.classList.contains('dark-mode');
     themeBtn.textContent = isDark ? '☀️ Tryb jasny' : '🌙 Tryb ciemny';
-    localStorage.setItem('schedule_theme', isDark ? 'dark' : 'light');
+    localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
   });
 
-  setupPasswordChangeUI();
+  // Logowanie administratora (Firebase Authentication: e-mail + haslo)
+  const loginOverlay = document.getElementById('loginOverlay');
+  const emailInput = document.getElementById('adminEmailInput');
+  const passInput = document.getElementById('adminPasswordInput');
+  const loginError = document.getElementById('loginError');
+  const btnDoLogin = document.getElementById('btnDoLogin');
 
-  // Logowanie
-  const overlay = document.getElementById('loginOverlay');
-  const input = document.getElementById('adminPasswordInput');
-  const errMsg = document.getElementById('loginError');
+  const showLoginError = (message) => {
+    loginError.textContent = message;
+    loginError.style.display = 'block';
+  };
+  const closeLogin = () => loginOverlay.classList.remove('open');
 
   document.getElementById('adminLoginBtn').addEventListener('click', () => {
-    input.value = '';
-    errMsg.style.display = 'none';
-    overlay.classList.add('open');
-    setTimeout(() => input.focus(), 100);
+    passInput.value = '';
+    loginError.style.display = 'none';
+    loginOverlay.classList.add('open');
+    setTimeout(() => (emailInput.value ? passInput : emailInput).focus(), 100);
   });
+  document.getElementById('btnLoginCancel').addEventListener('click', closeLogin);
+  loginOverlay.addEventListener('click', e => { if (e.target === loginOverlay) closeLogin(); });
+  emailInput.addEventListener('keydown', e => { if (e.key === 'Enter') passInput.focus(); });
+  passInput.addEventListener('keydown', e => { if (e.key === 'Enter') btnDoLogin.click(); });
 
-  document.getElementById('btnLoginCancel').addEventListener('click', () => overlay.classList.remove('open'));
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btnDoLogin').click(); });
-
-  document.getElementById('btnDoLogin').addEventListener('click', async () => {
-    if (await sha256(input.value) === currentAdminHash) {
-      isAdmin = true;
-      overlay.classList.remove('open');
-      document.getElementById('adminLoginBtn').style.display = 'none';
-      document.getElementById('editBtn').style.display = 'inline-block';
-      document.getElementById('changePassBtn').style.display = 'inline-block';
-      document.getElementById('adminLogoutBtn').style.display = 'inline-block';
-    } else {
-      errMsg.style.display = 'block';
-      input.value = '';
-      input.focus();
+  btnDoLogin.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    const password = passInput.value;
+    if (!email || !password) {
+      showLoginError('Podaj e-mail i hasło.');
+      return;
+    }
+    btnDoLogin.disabled = true;
+    loginError.style.display = 'none';
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      passInput.value = '';
+      closeLogin();
+    } catch (err) {
+      showLoginError(authErrorMessage(err.code));
+      passInput.value = '';
+      passInput.focus();
+    } finally {
+      btnDoLogin.disabled = false;
     }
   });
 
-  document.getElementById('adminLogoutBtn').addEventListener('click', () => {
+  document.getElementById('adminLogoutBtn').addEventListener('click', async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn('Błąd wylogowania:', e.message);
+    }
     isAdmin = false;
-    document.getElementById('adminLoginBtn').style.display = '';
-    document.getElementById('editBtn').style.display = 'none';
-    document.getElementById('changePassBtn').style.display = 'none';
-    document.getElementById('adminLogoutBtn').style.display = 'none';
+    setAdminUi('guest');
+    clearNotice('auth');
   });
 
-  // Modal Edycji
+  // Modal edycji planu
   const editOverlay = document.getElementById('editOverlay');
   const saveStatus = document.getElementById('saveStatus');
   const btnSave = document.getElementById('btnSave');
@@ -462,6 +513,8 @@ function setupEvents() {
   document.getElementById('editBtn').addEventListener('click', () => {
     if (!isAdmin) return;
     buildEditForm();
+    saveStatus.className = 'save-status';
+    saveStatus.textContent = '';
     saveStatus.style.display = 'none';
     btnSave.disabled = false;
     btnSave.textContent = '💾 Zapisz';
@@ -472,17 +525,20 @@ function setupEvents() {
     btnSave.disabled = true;
     btnSave.textContent = '⏳ Zapisuję...';
     try {
-      await saveData(collectForm());
+      const updated = collectForm();
+      await saveData(updated);
+      daysData = updated;
       renderDesktop();
       renderMobile();
       updateStatus();
       saveStatus.className = 'save-status ok';
-      saveStatus.innerHTML = '✅ Zapisano!';
+      saveStatus.textContent = '✅ Zapisano!';
       saveStatus.style.display = 'flex';
-      setTimeout(() => { closeEdit(); }, 1200);
+      setTimeout(closeEdit, 1200);
     } catch (err) {
+      console.warn('Błąd zapisu planu:', err.code || err.message);
       saveStatus.className = 'save-status err';
-      saveStatus.innerHTML = `⚠️ Błąd zapisu!`;
+      saveStatus.textContent = saveErrorMessage(err.code);
       saveStatus.style.display = 'flex';
       btnSave.disabled = false;
       btnSave.textContent = '💾 Zapisz';
@@ -516,20 +572,29 @@ function buildEditForm() {
     day.lessons.forEach((l, li) => {
       const isEmpty = !l || l.empty;
       const currentName = isEmpty ? '' : (l.name || '');
+      const known = SUBJECT_OPTIONS.some(opt => String(opt).toLowerCase() === currentName.toLowerCase());
+      // Wartosc spoza listy przedmiotow dopisujemy do selecta, zeby zapis nie
+      // zamienil jej na placeholder (cicha utrata danych).
+      const options = subjectOptionsFor(SUBJECT_OPTIONS, currentName);
+      const extraIndex = known ? -1 : options.length - 1;
 
       let optionsHtml = `<option value="" ${isEmpty ? 'selected' : ''} disabled>-- wybierz przedmiot --</option>`;
-      optionsHtml += SUBJECT_OPTIONS.map(opt => `<option value="${opt}" ${!isEmpty && opt === currentName.toLowerCase() ? 'selected' : ''}>${opt}</option>`).join('');
+      optionsHtml += options.map((opt, idx) => {
+        const selected = !isEmpty && opt.toLowerCase() === currentName.toLowerCase();
+        const label = idx === extraIndex ? `${opt} (spoza listy)` : opt;
+        return `<option value="${esc(opt)}" ${selected ? 'selected' : ''}>${esc(label)}</option>`;
+      }).join('');
 
       const row = document.createElement('div');
       row.className = `edit-lesson-row${isEmpty ? ' is-empty' : ''}`;
       row.dataset.di = di;
       row.dataset.li = li;
       row.innerHTML = `
-        <div>${TIMES[li].num}</div>
-        <div class="icon-preview">${isEmpty ? '🚫' : (SUBJECT_MAP[currentName.toLowerCase()] || '📖')}</div>
+        <div>${esc(TIMES[li].num)}</div>
+        <div class="icon-preview">${isEmpty ? EMPTY_ICON : esc(SUBJECT_MAP[currentName.toLowerCase()] || FALLBACK_ICON)}</div>
         <select class="es" ${isEmpty ? 'disabled' : ''}>${optionsHtml}</select>
-        <input type="text" class="er" placeholder="Sala" ${isEmpty ? 'disabled' : ''}>
-        <button type="button" class="empty-toggle${isEmpty ? ' toggled' : ''}">🚫</button>`;
+        <input type="text" class="er" placeholder="Sala" maxlength="${LIMITS.ROOM}" ${isEmpty ? 'disabled' : ''}>
+        <button type="button" class="empty-toggle${isEmpty ? ' toggled' : ''}" aria-label="Pusta lekcja">${EMPTY_ICON}</button>`;
 
       // Bezpieczne przypisanie wartości sali (unika XSS przez innerHTML)
       row.querySelector('.er').value = isEmpty ? '' : (l.room || '');
@@ -539,19 +604,19 @@ function buildEditForm() {
       const emptyToggleBtn = row.querySelector('.empty-toggle');
       const roomInput = row.querySelector('.er');
 
-      selectEl.onchange = () => { iconPreviewEl.textContent = SUBJECT_MAP[selectEl.value] || '📖'; };
+      selectEl.onchange = () => { iconPreviewEl.textContent = SUBJECT_MAP[selectEl.value] || FALLBACK_ICON; };
       emptyToggleBtn.onclick = () => {
         const now = emptyToggleBtn.classList.toggle('toggled');
         row.classList.toggle('is-empty', now);
         selectEl.disabled = now;
         roomInput.disabled = now;
         if (now) {
-          iconPreviewEl.textContent = '🚫';
+          iconPreviewEl.textContent = EMPTY_ICON;
         } else {
           if (!selectEl.value && selectEl.options.length > 1) {
             selectEl.selectedIndex = 1;
           }
-          iconPreviewEl.textContent = SUBJECT_MAP[selectEl.value] || '📖';
+          iconPreviewEl.textContent = SUBJECT_MAP[selectEl.value] || FALLBACK_ICON;
         }
       };
 
@@ -567,20 +632,32 @@ function collectForm() {
     const di = +row.dataset.di;
     const li = +row.dataset.li;
     const empty = row.querySelector('.empty-toggle').classList.contains('toggled');
-    const subjName = row.querySelector('.es').value.trim();
-    nd[di].lessons[li] = empty ? { empty: true } : {
-      icon: SUBJECT_MAP[subjName.toLowerCase()] || '📖',
-      name: subjName || '—',
-      room: row.querySelector('.er').value.trim() || '—'
-    };
+    if (empty) {
+      nd[di].lessons[li] = { empty: true };
+      return;
+    }
+    // normalizeLesson pilnuje limitow dlugosci zgodnych z database.rules.json
+    nd[di].lessons[li] = normalizeLesson({
+      name: row.querySelector('.es').value,
+      room: row.querySelector('.er').value
+    }, SUBJECT_MAP);
   });
   return nd;
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   applyClassBranding();
-  ensureAuth();          // logowanie anonimowe w tle (nie blokuje renderu)
-  await loadData();
+  // app.js wystartowal - wylaczamy awaryjny licznik z boot-fallback.js
+  if (typeof window.planReady === 'function') window.planReady();
   setupEvents();
+  initSchedule();
+  onAuthStateChanged(auth, refreshAdminState);
   setInterval(updateStatus, 10000);
 });
+
+
+
+
+
+
+
