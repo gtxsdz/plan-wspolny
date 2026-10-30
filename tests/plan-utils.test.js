@@ -12,6 +12,7 @@ import {
   clampBytes,
   normalizeLesson,
   mergeDays,
+  hasAnyLesson,
   dayTimeRange,
   subjectOptionsFor,
   activeBadge,
@@ -164,6 +165,16 @@ test('mergeDays nie wywraca sie na smieciowych danych', () => {
   assert.equal(days.length, DAY_META.length);
   assert.ok(days.every((d) => d.lessons.length === TIMES.length));
   assert.equal(days[0].lessons[0].empty, true);
+});
+
+test('hasAnyLesson odsiewa pusty i uszkodzony plan (cache nie moze zaslonic planu)', () => {
+  assert.equal(hasAnyLesson([{ lessons: [{ name: 'wf', room: '1' }] }]), true);
+  assert.equal(hasAnyLesson([{ lessons: [{ empty: true }, { empty: true }] }]), false);
+  assert.equal(hasAnyLesson([{ lessons: [] }]), false);
+  assert.equal(hasAnyLesson([{}]), false);
+  assert.equal(hasAnyLesson([]), false);
+  assert.equal(hasAnyLesson(null), false);
+  assert.equal(hasAnyLesson('nie-tablica'), false);
 });
 
 test('dayTimeRange liczy zakres od pierwszej do ostatniej lekcji', () => {

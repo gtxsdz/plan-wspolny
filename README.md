@@ -23,6 +23,10 @@ Lokalnie / na innym adresie można wymusić klasę parametrem: `index.html?klasa
 | `database.rules.json` | reguły Realtime Database (wdrażane przez CI) |
 | `tools/`, `tests/` | skrypty pomocnicze i testy — nie są publikowane na hosting |
 
+## Gdy baza nie odpowiada
+
+Plan z `config.js` jest rysowany od razu po wczytaniu strony, więc nigdy nie ma pustej tabeli czekającej na odpowiedź bazy. Gdy odczyt z Realtime Database się nie uda, aplikacja pokazuje kolejno: plan zapamiętany w przeglądarce (tylko jeśli zawiera realne lekcje) albo plan wbudowany w `config.js` — zawsze z komunikatem, że może być nieaktualny.
+
 ## Bezpieczeństwo
 
 - **Odczyt planu:** publiczny — `schedule` czyta każdy (plan jest informacją publiczną dla uczniów i rodziców).

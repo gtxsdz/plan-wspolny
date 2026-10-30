@@ -19,6 +19,7 @@ import {
   esc,
   normalizeLesson,
   mergeDays,
+  hasAnyLesson,
   dayTimeRange,
   subjectOptionsFor,
   activeBadge,
@@ -139,27 +140,34 @@ function applyDays(fbDays, options = {}) {
   const { days, warnings } = mergeDays(DAY_META, DEFAULT_LESSONS, fbDays, TIMES, SUBJECT_MAP);
   daysData = days;
   warnings.forEach(w => console.warn('[plan] ' + w));
-  if (!options.fromCache) cacheSchedule(days);
+  // Plan wbudowany w aplikacje nie trafia do cache - cache ma trzymac dane z bazy.
+  if (options.saveCache !== false) cacheSchedule(days);
   renderDesktop();
   renderMobile();
   updateStatus();
 }
 
+// Awaria bazy nie moze zostawic strony bez lekcji: plan wbudowany w aplikacje
+// (config.js) jest prawdziwym planem klasy, wiec pokazujemy go zawsze, a cache
+// tylko go zastepuje, gdy zawiera realne lekcje.
 function showCachedPlan(reason) {
   const cached = readCache();
-  if (!cached) {
-    showNotice('Nie udało się pobrać planu z bazy. Odśwież stronę albo spróbuj później.', 'data', true);
+  if (cached && hasAnyLesson(cached.days)) {
+    applyDays(cached.days, { saveCache: false });
+    const when = new Date(cached.at).toLocaleString('pl-PL');
+    showNotice(`${reason} Pokazuję plan zapamiętany ${when}.`, 'data', true);
     return;
   }
-  applyDays(cached.days, { fromCache: true });
-  const when = new Date(cached.at).toLocaleString('pl-PL');
-  showNotice(`${reason} Pokazuję plan zapamiętany ${when}.`, 'data', true);
+  showNotice(`${reason} Pokazuję plan zapisany w aplikacji (może być nieaktualny).`, 'data', true);
 }
 
-// Pierwszy odczyt przez get() (bez migniecia planu domyslnego), a potem onValue()
-// - dzieki temu zmiany wprowadzone przez innego administratora pojawiaja sie
-// na otwartej stronie bez odswiezania.
+// Pierwszy odczyt przez get() (plan z config.js jest juz na ekranie), a potem
+// onValue() - dzieki temu zmiany wprowadzone przez innego administratora
+// pojawiaja sie na otwartej stronie bez odswiezania.
 async function initSchedule() {
+  // Plan z config.js rysujemy od razu: strona nie jest pusta, zanim odpowie baza.
+  applyDays(null, { saveCache: false });
+
   try {
     const snapshot = await get(ref(db, 'schedule/days'));
     clearNotice('data');
