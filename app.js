@@ -26,6 +26,7 @@ import {
   nextBadge,
   saveErrorMessage,
   authErrorMessage,
+  planChangedSince,
   LIMITS,
   EMPTY_ICON,
   FALLBACK_ICON
@@ -58,6 +59,11 @@ let daysData = mergeDays(DAY_META, DEFAULT_LESSONS, null, TIMES, SUBJECT_MAP).da
 let isAdmin = false;
 let activeSubject = null;
 let noticeSource = null;
+// Znacznik ostatniego zapisu planu widziany w bazie (schedule/updatedAt).
+// editBaseUpdatedAt to jego wartosc w chwili otwarcia edytora - roznica miedzy
+// nimi oznacza, ze ktos inny zapisal plan w miedzyczasie.
+let latestUpdatedAt = null;
+let editBaseUpdatedAt = null;
 
 // Komunikaty dla uzytkownika wystawia boot-fallback.js (dziala takze wtedy,
 // gdy app.js w ogole sie nie uruchomi).
@@ -184,6 +190,14 @@ async function initSchedule() {
   }, err => {
     console.warn('Błąd nasłuchu zmian w Firebase:', err.message);
     showCachedPlan('Utracono połączenie z bazą planu.');
+  });
+
+  // Osobny nasluch znacznika zapisu: sluzy do wykrycia, ze ktos inny zmienil
+  // plan, zanim zdazylismy zapisac wlasna edycje (patrz obsluga przycisku Zapisz).
+  onValue(ref(db, 'schedule/updatedAt'), snapshot => {
+    latestUpdatedAt = snapshot.val();
+  }, err => {
+    console.warn('Błąd nasłuchu znacznika zapisu:', err.message);
   });
 }
 
@@ -521,6 +535,8 @@ function setupEvents() {
   document.getElementById('editBtn').addEventListener('click', () => {
     if (!isAdmin) return;
     buildEditForm();
+    // Punkty odniesienia dla wykrywania rownoczesnej edycji innego administratora
+    editBaseUpdatedAt = latestUpdatedAt;
     saveStatus.className = 'save-status';
     saveStatus.textContent = '';
     saveStatus.style.display = 'none';
@@ -534,6 +550,16 @@ function setupEvents() {
     btnSave.textContent = '⏳ Zapisuję...';
     try {
       const updated = collectForm();
+      // Ktos inny mogl zapisac plan, gdy edytor byl otwarty - wtedy nasz zapis
+      // nadpisalby jego zmiany bez ostrzezenia.
+      if (planChangedSince(editBaseUpdatedAt, latestUpdatedAt)) {
+        saveStatus.className = 'save-status err';
+        saveStatus.textContent = '⚠️ Ktoś inny zmienił plan w trakcie edycji. Odśwież stronę i wprowadź zmiany ponownie.';
+        saveStatus.style.display = 'flex';
+        btnSave.disabled = false;
+        btnSave.textContent = '💾 Zapisz';
+        return;
+      }
       await saveData(updated);
       daysData = updated;
       renderDesktop();

@@ -19,6 +19,7 @@ import {
   nextBadge,
   saveErrorMessage,
   authErrorMessage,
+  planChangedSince,
   LIMITS,
   FALLBACK_ICON,
   DEFAULT_ROOM
@@ -194,6 +195,30 @@ test('subjectOptionsFor zachowuje wartosc spoza listy (koniec cichej utraty dany
   assert.deepEqual(subjectOptionsFor(['matematyka'], ''), ['matematyka']);
   assert.deepEqual(subjectOptionsFor(null, 'chemia'), ['chemia']);
   assert.deepEqual(subjectOptionsFor(undefined, null), []);
+});
+
+test('planChangedSince wykrywa rownoczesny zapis innego administratora', () => {
+  // ten sam znacznik - nic sie nie zmienilo, zapis dozwolony
+  assert.equal(planChangedSince(1700000000000, 1700000000000), false);
+  assert.equal(planChangedSince('1700000000000', 1700000000000), false);
+
+  // inny znacznik - ktos zapisal plan w trakcie edycji
+  assert.equal(planChangedSince(1700000000000, 1700000000001), true);
+
+  // edytor otwarty, gdy w bazie nie bylo jeszcze znacznika,
+  // a w miedzyczasie ktos zapisal plan
+  assert.equal(planChangedSince(null, 1700000000000), true);
+  assert.equal(planChangedSince(undefined, 1700000000000), true);
+  assert.equal(planChangedSince('', 1700000000000), true);
+
+  // brak znacznika w bazie nie moze blokowac zapisu (plan bez historii edycji)
+  assert.equal(planChangedSince(null, null), false);
+  assert.equal(planChangedSince(1700000000000, null), false);
+  assert.equal(planChangedSince(1700000000000, undefined), false);
+
+  // wartosci nieliczbowe traktujemy jak brak znacznika
+  assert.equal(planChangedSince(1700000000000, 'abc'), false);
+  assert.equal(planChangedSince('abc', 1700000000000), true);
 });
 
 test('etykiety lekcji i komunikaty bledow', () => {
