@@ -62,8 +62,11 @@ let noticeSource = null;
 // Znacznik ostatniego zapisu planu widziany w bazie (schedule/updatedAt).
 // editBaseUpdatedAt to jego wartosc w chwili otwarcia edytora - roznica miedzy
 // nimi oznacza, ze ktos inny zapisal plan w miedzyczasie.
+// editBaselineKnown = false oznacza, ze nie udalo sie ustalic punktu odniesienia
+// (np. brak polaczenia) - wtedy nie blokujemy zapisu, zamiast falszywie go odrzucac.
 let latestUpdatedAt = null;
 let editBaseUpdatedAt = null;
+let editBaselineKnown = false;
 
 // Komunikaty dla uzytkownika wystawia boot-fallback.js (dziala takze wtedy,
 // gdy app.js w ogole sie nie uruchomi).
@@ -532,11 +535,22 @@ function setupEvents() {
   document.getElementById('btnCancel').addEventListener('click', closeEdit);
   editOverlay.addEventListener('click', e => { if (e.target === editOverlay) closeEdit(); });
 
-  document.getElementById('editBtn').addEventListener('click', () => {
+  document.getElementById('editBtn').addEventListener('click', async () => {
     if (!isAdmin) return;
     buildEditForm();
-    // Punkty odniesienia dla wykrywania rownoczesnej edycji innego administratora
-    editBaseUpdatedAt = latestUpdatedAt;
+    // Punkt odniesienia bierzemy swiezym odczytem, a nie z nasluchu: nasluch
+    // rejestruje sie po pierwszym odczycie planu, wiec w chwili otwarcia edytora
+    // moze jeszcze nie miec zadnej wartosci (latestUpdatedAt === null) i zapis
+    // zostalby odrzucony bez powodu.
+    try {
+      const stampSnapshot = await get(ref(db, 'schedule/updatedAt'));
+      editBaseUpdatedAt = stampSnapshot.val();
+      editBaselineKnown = true;
+    } catch (err) {
+      console.warn('Nie udało się odczytać znacznika zapisu planu:', err.message);
+      editBaseUpdatedAt = latestUpdatedAt;
+      editBaselineKnown = latestUpdatedAt !== null && latestUpdatedAt !== undefined;
+    }
     saveStatus.className = 'save-status';
     saveStatus.textContent = '';
     saveStatus.style.display = 'none';
@@ -552,7 +566,7 @@ function setupEvents() {
       const updated = collectForm();
       // Ktos inny mogl zapisac plan, gdy edytor byl otwarty - wtedy nasz zapis
       // nadpisalby jego zmiany bez ostrzezenia.
-      if (planChangedSince(editBaseUpdatedAt, latestUpdatedAt)) {
+      if (editBaselineKnown && planChangedSince(editBaseUpdatedAt, latestUpdatedAt)) {
         saveStatus.className = 'save-status err';
         saveStatus.textContent = '⚠️ Ktoś inny zmienił plan w trakcie edycji. Odśwież stronę i wprowadź zmiany ponownie.';
         saveStatus.style.display = 'flex';
