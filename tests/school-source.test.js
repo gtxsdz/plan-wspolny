@@ -134,3 +134,21 @@ test('buildSchoolPayload: smieci i brak danych nie wywracaja budowy', () => {
   assert.deepEqual(payload.exams, {});
   assert.deepEqual(payload.changes, {});
 });
+
+test('buildSchoolPayload: dluga nazwa 4Ta dopasowuje lekcje, choc do planu idzie skrocona', () => {
+  // 42 znaki - wiecej niz LIMITS.SUBJECT (40); wczesniej skrocenie rozbijalo
+  // dopasowanie do aliasu i sprawdzian wypadal z planu
+  const long = 'prace w obiektach architektury krajobrazu';
+  const { payload } = buildSchoolPayload({
+    cfg: CLASS_4TA,
+    account: 'wiktoria',
+    todayIso: '2026-11-27',
+    horizonDays: 21,
+    exams: [{ id: 'd1', date: '2026-12-01', subject: long, type: 'Sprawdzian' }],
+    changes: [],
+    planRows: [{ date: '2026-12-01', lesson_no: 3, subject: long }],
+    now: 1
+  });
+  assert.equal(payload.exams.d1?.lesson, 3, 'lekcja znaleziona po pelnej nazwie');
+  assert.equal(payload.exams.d1.subject, long.slice(0, 40), 'w planie zostaje nazwa w limicie');
+});

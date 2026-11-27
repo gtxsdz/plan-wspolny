@@ -17,6 +17,7 @@ import {
   changedDays,
   conflictDays,
   mobileSlotIndexes,
+  journalDayEndMins,
   dayTimeRange,
   subjectOptionsFor,
   activeBadge,
@@ -470,4 +471,35 @@ test('mobileSlotIndexes: pusta lekcja tylko wtedy, gdy ma znacznik z dziennika',
   assert.deepEqual(mobileSlotIndexes(d, ovDay), [0, 1, 2, 3], 'puste sloty ze znacznikiem sa widoczne');
   assert.deepEqual(mobileSlotIndexes(day(), { slots: [] }), []);
   assert.deepEqual(mobileSlotIndexes(null, null), []);
+});
+
+test('mergeDays: pojedynczy dzien z bazy zostaje swoim dniem, nie pierwszym', () => {
+  const meta = [
+    { dayNum: 1, name: 'Poniedziałek' }, { dayNum: 2, name: 'Wtorek' }, { dayNum: 3, name: 'Środa' },
+    { dayNum: 4, name: 'Czwartek' }, { dayNum: 5, name: 'Piątek' }
+  ];
+  const defaults = [
+    [{ name: 'matematyka', room: '243' }], [{ name: 'wf', room: 'sala' }],
+    [{ empty: true }], [{ empty: true }], [{ name: 'religia', room: '141' }]
+  ];
+  // Realtime Database zapisuje sam piatek jako {"4": {...}} - klucz jest indeksem dnia
+  const { days } = mergeDays(meta, defaults, { 4: { lessons: [{ name: 'religia', room: '9' }] } }, TIMES, SUBJECT_MAP);
+  assert.equal(days[4].lessons[0].name, 'religia');
+  assert.equal(days[4].lessons[0].room, '9');
+  assert.equal(days[0].lessons[0].name, 'matematyka', 'poniedziałek zostaje z planu domyślnego');
+  assert.equal(days[4].name, 'Piątek');
+});
+
+test('journalDayEndMins: dzisiejszy wpis na pozniejszej lekcji przedluza dzien', () => {
+  const lastEnd = TIMES[TIMES.length - 1].e;
+  const raw = {
+    exams: { e1: { date: '2026-12-07', lesson: 3 } },
+    changes: { c1: { date: '2026-12-07', lesson: TIMES.length }, c2: { date: '2026-12-08', lesson: 9 } }
+  };
+  assert.equal(journalDayEndMins(raw, '2026-12-07', TIMES), lastEnd);
+  assert.equal(journalDayEndMins(raw, '2026-12-07', TIMES), Math.max(TIMES[2].e, TIMES[TIMES.length - 1].e));
+  assert.equal(journalDayEndMins(raw, '2026-11-30', TIMES), 0, 'inny dzien nie przedluza dnia');
+  assert.equal(journalDayEndMins(null, '2026-12-07', TIMES), 0);
+  assert.equal(journalDayEndMins({ exams: { x: { date: '2026-12-07', lesson: 99 } } }, '2026-12-07', TIMES), 0, 'lekcja poza slotami');
+  assert.equal(journalDayEndMins({ changes: { y: { date: '2026-12-07', lesson: 0 } } }, '2026-12-07', TIMES), 0);
 });

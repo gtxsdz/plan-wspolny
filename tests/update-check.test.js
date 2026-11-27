@@ -10,7 +10,6 @@ import {
   CHECK_INTERVAL_MS,
   LOAD_SLACK_MS,
   parseVersion,
-  isStale,
   isBuildAfter,
   needsReload,
   shouldCheck,
@@ -27,14 +26,6 @@ test('parseVersion przyjmuje tylko wpis z niepustym skrotem commita', () => {
   assert.equal(parseVersion({ sha: '   ' }), null);
   assert.equal(parseVersion({ sha: 42 }), null);
   assert.deepEqual(parseVersion({ sha: 'abc' }), { sha: 'abc', app: '', css: '', built: '' });
-});
-
-test('isStale rozpoznaje nowsza wersje tylko przy dwoch znanych skrotach', () => {
-  assert.equal(isStale('aaa', 'bbb'), true);
-  assert.equal(isStale('aaa', 'aaa'), false);
-  assert.equal(isStale(null, 'bbb'), false, 'pierwsze uruchomienie nie jest "stara wersja"');
-  assert.equal(isStale('aaa', ''), false);
-  assert.equal(isStale(undefined, undefined), false);
 });
 
 test('shouldCheck ogranicza czestotliwosc pytan o wersje', () => {
@@ -72,36 +63,34 @@ test('versionLabel pokazuje krotki skrot commita, a bez niego date wdrozenia', (
 
 const LOADED_AT = Date.parse('2026-11-27T12:00:00Z');
 const remote = (sha, built = '2026-11-27T11:00:00Z') => ({ sha, built });
-const reloadArgs = (over = {}) => ({ seen: null, remote: remote('bbb'), loadedAt: LOADED_AT, reloadedFor: null, ...over });
+const reloadArgs = (over = {}) => ({ remote: remote('bbb'), loadedAt: LOADED_AT, reloadedFor: null, ...over });
 
-test('needsReload: znana wersja rozna od serwerowej wymaga przeladowania', () => {
-  assert.equal(needsReload(reloadArgs({ seen: 'aaa' })), true);
-  assert.equal(needsReload(reloadArgs({ seen: 'bbb' })), false);
-});
-
-test('needsReload: karta bez znanej wersji porownuje czas wdrozenia z wczytaniem', () => {
-  // wdrozenie 20 min po wczytaniu strony - karta na pewno jest stara
+test('needsReload: przeladowanie tylko gdy wersja z serwera powstala po wczytaniu karty', () => {
+  // wdrozenie 2 min po wczytaniu strony - karta jest stara (ten przypadek ginal
+  // przy zbyt duzym zapasie na zegar)
+  assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T12:02:00Z') })), true);
   assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T12:20:00Z') })), true);
   // wdrozenie tuz przed wczytaniem - to ta sama wersja
   assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T11:59:00Z') })), false);
-  // w granicach zapasu na zegar telefonu nie przeladowujemy
-  assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T12:05:00Z') })), false);
+  // w granicach zapasu na zegary nie przeladowujemy
+  assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T12:00:30Z') })), false);
 });
 
 test('needsReload: blokada petli, brak danych i smieci', () => {
-  assert.equal(needsReload(reloadArgs({ seen: 'aaa', reloadedFor: 'bbb' })), false, 'druga proba tej samej wersji');
-  assert.equal(needsReload(reloadArgs({ seen: 'aaa', reloadedFor: 'ccc' })), true);
+  assert.equal(needsReload(reloadArgs({ reloadedFor: 'bbb', remote: remote('bbb', '2026-11-27T12:20:00Z') })), false, 'druga proba tej samej wersji');
+  assert.equal(needsReload(reloadArgs({ reloadedFor: 'ccc', remote: remote('bbb', '2026-11-27T12:20:00Z') })), true);
   assert.equal(needsReload(), false);
-  assert.equal(needsReload({ seen: 'aaa', remote: null, loadedAt: LOADED_AT }), false);
-  assert.equal(needsReload({ seen: 'aaa', remote: { built: 'x' }, loadedAt: LOADED_AT }), false);
+  assert.equal(needsReload({ remote: null, loadedAt: LOADED_AT }), false);
+  assert.equal(needsReload({ remote: { built: 'x' }, loadedAt: LOADED_AT }), false);
   assert.equal(needsReload(reloadArgs({ remote: remote('bbb', 'nie-data') })), false);
   assert.equal(needsReload(reloadArgs({ loadedAt: Number.NaN })), false);
 });
 
 test('isBuildAfter: zapas na zegar i odpornosc na brak daty', () => {
-  assert.equal(LOAD_SLACK_MS, 10 * 60 * 1000, 'zapas ma chronic przed zegarem telefonu');
+  assert.equal(LOAD_SLACK_MS, 60 * 1000, 'zapas chroni tylko przed rozjechaniem zegarow');
   assert.equal(isBuildAfter({ built: '2026-11-27T12:30:00Z' }, LOADED_AT), true);
-  assert.equal(isBuildAfter({ built: '2026-11-27T12:05:00Z' }, LOADED_AT), false);
+  assert.equal(isBuildAfter({ built: '2026-11-27T12:05:00Z' }, LOADED_AT), true, 'wdrozenie 5 min po wczytaniu to nowsza wersja');
+  assert.equal(isBuildAfter({ built: '2026-11-27T12:00:30Z' }, LOADED_AT), false, 'pol minuty w zapasie na zegary');
   assert.equal(isBuildAfter({ built: '2026-11-27T12:05:00Z' }, LOADED_AT, 0), true);
   assert.equal(isBuildAfter({ built: '' }, LOADED_AT), false);
   assert.equal(isBuildAfter({}, LOADED_AT), false);

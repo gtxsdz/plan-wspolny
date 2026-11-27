@@ -16,7 +16,6 @@ import {
 } from './vendor/firebase/10.12.2/firebase-auth.js';
 import { CLASS_CONFIG } from './config.js';
 import {
-  SEEN_KEY,
   CHECKED_KEY,
   RELOADED_KEY,
   CHECK_INTERVAL_MS,
@@ -35,6 +34,7 @@ import {
   changedDays,
   conflictDays,
   mobileSlotIndexes,
+  journalDayEndMins,
   subjectOptionsFor,
   activeBadge,
   nextBadge,
@@ -117,9 +117,9 @@ function clearNotice(source) {
 // --- Nowa wersja na serwerze -------------------------------------------------
 // Telefon potrafi trzymac w pamieci stara karte (albo kopie z cache spod
 // poprzednich naglowkow hostingu). Raz po starcie, co kilka minut i przy kazdym
-// powrocie do karty pytamy o version.json zapisywany przy wdrozeniu; gdy serwer
-// ma nowsza wersje, przechodzimy na nia sama. Trwajaca edycje planu konczymy
-// komunikatem, a nie przeladowaniem w polowie pracy.
+// powrocie do karty pytamy o version.json zapisywany przy wdrozeniu; gdy wersja
+// z serwera powstala PO wczytaniu tej strony, przechodzimy na nia sama.
+// Trwajaca edycje planu konczymy komunikatem, a nie przeladowaniem w polowie pracy.
 const VERSION_FILE = 'version.json';
 // Chwila wczytania strony: karta, ktora nie zna swojej wersji, porownuje z nia
 // czas wdrozenia z version.json (patrz needsReload w lib/update-check.js).
@@ -166,15 +166,11 @@ async function checkDeployedVersion(force) {
     if (!remote) return; // brak pliku (praca lokalna) - nie ma czego porownywac
 
     const reload = needsReload({
-      seen: storageGet(SEEN_KEY),
       remote,
       loadedAt: PAGE_LOADED_AT,
       reloadedFor: storageGet(RELOADED_KEY)
     });
-    if (!reload) {
-      storageSet(SEEN_KEY, remote.sha);
-      return;
-    }
+    if (!reload) return;
     if (userBusy()) {
       showNotice(`Jest nowsza wersja planu (${versionLabel(remote)}). Odśwież stronę po zapisaniu zmian.`, 'version', false);
       return;
@@ -416,7 +412,9 @@ function nextOverlayRefreshAt(nowMins, dayEndMins) {
 function refreshOverlay() {
   overlayToday = warsawToday();
   const { mins } = getWarsawTime();
-  const dayEndMins = currentDayEndMins();
+  // Koniec dnia: ostatnia lekcja z planu albo pozniejsza lekcja z dzisiejszym
+  // wpisem z dziennika (np. siodma godzina dopisana w dzienniku na pustym slocie).
+  const dayEndMins = Math.max(currentDayEndMins(), journalDayEndMins(schoolRaw, overlayToday, TIMES));
   schoolOverlay = buildSchoolOverlay(schoolRaw, {
     todayIso: overlayToday,
     nowMins: mins,
