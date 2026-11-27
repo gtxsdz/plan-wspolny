@@ -324,11 +324,11 @@ async function initSchedule() {
   // w czasie awarii sama wroci do aktualnego planu, gdy siec wroci.
   onValue(ref(db, 'schedule/days'), snapshot => {
     clearNotice('data');
-    // Gdy zapis offline czeka na polaczenie, SDK pokazuje go lokalnie
-    // (snapshot.metadata.fromServer === false). Takiego stanu NIE wolno
-    // cache'owac: gdyby karta zamknela sie przed reconnection, Firebase gubi
-    // zapis, a my pokazywalibysmy niezapisany plan jako zapisany.
-    applyDays(snapshot.val(), { saveCache: snapshot.metadata?.fromServer !== false });
+    // Gdy zapis offline czeka na polaczenie, SDK pokazuje go lokalnie. Takiego
+    // stanu NIE wolno cache'owac: gdyby karta zamknela sie przed reconnection,
+    // Firebase gubi zapis, a my pokazywalibysmy niezapisany plan jako zapisany.
+    // Poprawny cache po zatwierdzonym zapisie stawia recznie handler btnSave.
+    applyDays(snapshot.val(), { saveCache: !saveInFlight });
   }, err => {
     console.warn('Błąd nasłuchu zmian w Firebase:', err.message);
     showCachedPlan('Utracono połączenie z bazą planu.');
@@ -1012,6 +1012,9 @@ function setupEvents() {
       daysData = daysData.map((day, i) => (changed.includes(i) ? updated[i] : day));
       refreshViews();
       editBaseline = updated;
+      // Zapis zatwierdzony przez Firebase (await rozwiazany) - dopiero teraz
+      // oswiezamy cache, zeby nigdy nie pokazywal zapisu, ktory nie dotarl.
+      cacheSchedule(daysData);
       saveStatus.className = 'save-status ok';
       saveStatus.textContent = conflicts.length
         ? `✅ Zapisano. Uwaga: ${conflicts.map(dayNameLower).join(', ')} zmienił się w czasie edycji — w bazie jest teraz Twoja wersja.`
