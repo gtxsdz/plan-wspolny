@@ -45,6 +45,10 @@
         {
           "source": "**/*.css",
           "headers": [{ "key": "Cache-Control", "value": "max-age=0, must-revalidate" }]
+        },
+        {
+          "source": "/version.json",
+          "headers": [{ "key": "Cache-Control", "value": "no-store" }]
         }
       ]
     },
@@ -90,6 +94,10 @@
         {
           "source": "**/*.css",
           "headers": [{ "key": "Cache-Control", "value": "max-age=0, must-revalidate" }]
+        },
+        {
+          "source": "/version.json",
+          "headers": [{ "key": "Cache-Control", "value": "no-store" }]
         }
       ]
     }

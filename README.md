@@ -17,6 +17,7 @@ Lokalnie / na innym adresie można wymusić klasę parametrem: `index.html?klasa
 | `app.js` | wspólna logika: render (desktop + mobile), edytor, motyw, odliczanie w komórkach, logowanie administratora |
 | `lib/plan-utils.js` | czyste funkcje (escapowanie HTML, scalanie z bazą, zakres godzin, komunikaty błędów, daty i nakładka sprawdzianów) — pokryte testami |
 | `lib/school-source.js` | zamiana wierszy z bazy eDzienniczka (sprawdziany, zmiany planu, plan dnia) na węzeł `school` — bez SQL i HTTP, pokryte testami |
+| `lib/update-check.js` | wykrywanie starej kopii w przeglądarce: porównanie `version.json` z wersją uruchomioną w karcie i przejście na nową (czyste funkcje, testy) |
 | `index.html` | wspólny szkielet; tytuł, nagłówek i wychowawca ustawiane dynamicznie |
 | `styles.css` | wspólne style + zmienne motywu jasny/ciemny |
 | `boot-fallback.js` | komunikat awaryjny, gdy `app.js` nie wystartuje (brak sieci, brak plików) |
@@ -82,7 +83,9 @@ Push do `main` uruchamia dwa workflowy GitHub Actions:
 - `deploy-plan5a.yml` → projekt `plan-e5ce7` (hosting `plan5a.web.app` + reguły bazy),
 - `deploy-plan4ta.yml` → projekt `plan4ta` (hosting `plan4ta.web.app` + reguły bazy).
 
-Każdy workflow przed publikacją uruchamia `npm run check` i `npm test`, a krok „Wdrożenie reguł Realtime Database” wykonuje `firebase deploy --only database`. Jeśli sekret service account nie istnieje, krok reguł jest pomijany (hosting nadal się wdroży).
+Każdy workflow przed publikacją uruchamia `npm run check` i `npm test`, zapisuje `version.json` (`tools/write-version.mjs` — skrót commita, sumy kontrolne `app.js` i `styles.css`), a krok „Wdrożenie reguł Realtime Database” wykonuje `firebase deploy --only database`. Jeśli sekret service account nie istnieje, krok reguł jest pomijany (hosting nadal się wdroży).
+
+`version.json` jest publikowany z nagłówkiem `Cache-Control: no-store`. Aplikacja pyta o niego po starcie, co 5 minut i przy każdym powrocie do karty; jeśli serwer ma nowszą wersję niż ta uruchomiona, sama przechodzi na nowy adres z parametrem `?v=`. Dzięki temu telefon trzymający starą kartę w pamięci nie zostaje na poprzedniej wersji — wyjątkiem jest otwarty edytor planu lub okno logowania: wtedy pojawia się komunikat z prośbą o odświeżenie po zapisaniu.
 
 Ręcznie (uwaga: `--only hosting` bez targetu próbuje wdrożyć oba targety i kończy się błędem, bo każdy projekt ma tylko jeden):
 

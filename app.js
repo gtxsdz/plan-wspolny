@@ -16,6 +16,17 @@ import {
 } from './vendor/firebase/10.12.2/firebase-auth.js';
 import { CLASS_CONFIG } from './config.js';
 import {
+  SEEN_KEY,
+  CHECKED_KEY,
+  RELOADED_KEY,
+  CHECK_INTERVAL_MS,
+  parseVersion,
+  isStale,
+  shouldCheck,
+  reloadHref,
+  versionLabel
+} from './lib/update-check.js';
+import {
   esc,
   normalizeLesson,
   mergeDays,
@@ -90,6 +101,79 @@ function clearNotice(source) {
   if (noticeSource !== source) return;
   noticeSource = null;
   planNotice('');
+}
+
+// --- Nowa wersja na serwerze -------------------------------------------------
+// Telefon potrafi trzymac w pamieci stara karte (albo kopie z cache spod
+// poprzednich naglowkow hostingu). Raz po starcie, co kilka minut i przy kazdym
+// powrocie do karty pytamy o version.json zapisywany przy wdrozeniu; gdy serwer
+// ma nowsza wersje, przechodzimy na nia sama. Trwajaca edycje planu konczymy
+// komunikatem, a nie przeladowaniem w polowie pracy.
+const VERSION_FILE = 'version.json';
+let versionCheckBusy = false;
+
+function storageGet(key) {
+  try { return window.sessionStorage.getItem(key); } catch { return null; }
+}
+
+function storageSet(key, value) {
+  try { window.sessionStorage.setItem(key, value); } catch { /* tryb prywatny */ }
+}
+
+async function fetchDeployedVersion() {
+  const res = await fetch(`${VERSION_FILE}?t=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) return null;
+  return parseVersion(await res.json());
+}
+
+// Otwarty modal edycji albo logowania - wtedy nie przerywamy pracy uzytkownika.
+function dialogOpen() {
+  const open = el => !!el && !el.hidden && getComputedStyle(el).display !== 'none';
+  return open(document.getElementById('editOverlay')) || open(document.getElementById('loginOverlay'));
+}
+
+function reloadToVersion(sha) {
+  storageSet(RELOADED_KEY, sha);
+  window.location.replace(reloadHref(window.location.href, sha));
+}
+
+async function checkDeployedVersion(force) {
+  if (versionCheckBusy || document.visibilityState === 'hidden') return;
+  const now = Date.now();
+  if (!force && !shouldCheck(storageGet(CHECKED_KEY), now)) return;
+
+  versionCheckBusy = true;
+  try {
+    const remote = await fetchDeployedVersion();
+    storageSet(CHECKED_KEY, new Date(now).toISOString());
+    if (!remote) return; // brak pliku (praca lokalna) - nie ma czego porownywac
+
+    const seen = storageGet(SEEN_KEY);
+    if (!isStale(seen, remote.sha) || storageGet(RELOADED_KEY) === remote.sha) {
+      storageSet(SEEN_KEY, remote.sha);
+      return;
+    }
+    if (dialogOpen()) {
+      showNotice(`Jest nowsza wersja planu (${versionLabel(remote)}). Odśwież stronę po zapisaniu zmian.`, 'version', false);
+      return;
+    }
+    storageSet(SEEN_KEY, remote.sha);
+    reloadToVersion(remote.sha);
+  } catch (err) {
+    // Brak sieci nie moze przeszkadzac w ogladaniu planu.
+    console.warn('Nie udało się sprawdzić wersji aplikacji:', err.message);
+  } finally {
+    versionCheckBusy = false;
+  }
+}
+
+function watchVersion() {
+  window.setTimeout(() => checkDeployedVersion(true), 3000);
+  window.setInterval(() => checkDeployedVersion(false), CHECK_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkDeployedVersion(false);
+  });
+  window.addEventListener('online', () => checkDeployedVersion(false));
 }
 
 // Ustaw tytuł strony, nagłówek i wychowawcę na podstawie konfiguracji klasy
@@ -922,6 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSchool();
   onAuthStateChanged(auth, refreshAdminState);
   setInterval(updateStatus, 10000);
+  watchVersion();
 });
 
 

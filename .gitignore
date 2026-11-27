@@ -10,6 +10,9 @@ npm-debug.log*
 # Env
 .env
 
+# Znacznik wersji - powstaje przy wdrozeniu (tools/write-version.mjs)
+version.json
+
 # OS
 .DS_Store
 Thumbs.db

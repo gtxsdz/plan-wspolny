@@ -97,3 +97,30 @@ test('kazdy hosting ustawia naglowki bezpieczenstwa i cache dla sciezki /', () =
     }
   }
 });
+
+test('version.json jest publikowany bez cache (wykrywanie starej kopii)', () => {
+  for (const block of firebaseJson.hosting) {
+    assert.equal(
+      isIgnored('version.json', block.ignore || []),
+      false,
+      `hosting ${block.target}: version.json nie moze byc wykluczony z publikacji`
+    );
+    const rule = (block.headers || []).find((h) => h.source === '/version.json');
+    assert.ok(rule, `hosting ${block.target}: brak reguly naglowkow dla /version.json`);
+    const cache = (rule.headers || []).find((h) => h.key === 'Cache-Control');
+    assert.equal(cache?.value, 'no-store', `hosting ${block.target}: version.json musi miec Cache-Control no-store`);
+  }
+});
+
+test('wdrozenie zapisuje version.json przed publikacja hostingu', () => {
+  for (const target of ['plan5a', 'plan4ta']) {
+    const workflow = read(`.github/workflows/deploy-${target}.yml`);
+    const versionAt = workflow.indexOf('tools/write-version.mjs');
+    const deployAt = workflow.indexOf('name: Publikacja hostingu');
+    assert.ok(versionAt > -1, `workflow ${target}: brak kroku tools/write-version.mjs`);
+    assert.ok(deployAt > -1, `workflow ${target}: brak kroku publikacji hostingu`);
+    assert.ok(versionAt < deployAt, `workflow ${target}: version.json musi powstac przed publikacja`);
+  }
+  assert.ok(existsSync(path.join(ROOT, 'tools/write-version.mjs')), 'brak tools/write-version.mjs');
+});
+
