@@ -71,7 +71,7 @@ function dbPathFor(pupilId) {
 }
 
 function readRows(cfg, account, pupilId, todayIso) {
-  const from = addISODays(todayIso, 1);
+  const from = addISODays(todayIso, 0);
   const to = addISODays(todayIso, HORIZON_DAYS);
   if (!from || !to) throw new Error(`Nieprawidlowa data: ${todayIso}`);
   if (!cfg?.school?.account) throw new Error(`Klasa ${cfg.id}: brak konfiguracji school.account`);

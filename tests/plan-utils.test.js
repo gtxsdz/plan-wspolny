@@ -250,13 +250,75 @@ test('daty ISO: przesuniecia, dzien tygodnia i formaty', () => {
   assert.equal(relativeDay('', '2026-11-27'), '');
 });
 
-test('wyswietlany tydzien: biezacy od poniedzialku, w piatek nastepny', () => {
+test('wyswietlany tydzien: biezacy od poniedzialku, w piatek nastepny po lekcjach', () => {
   assert.equal(displayWeekMonday('2026-11-23'), '2026-11-23', 'poniedzialek');
   assert.equal(displayWeekMonday('2026-11-26'), '2026-11-23', 'czwartek');
-  assert.equal(displayWeekMonday('2026-11-27'), '2026-11-30', 'piatek pokazuje nastepny tydzien');
+  assert.equal(displayWeekMonday('2026-11-27'), '2026-11-30', 'piatek bez zegara = po lekcjach');
   assert.equal(displayWeekMonday('2026-11-28'), '2026-11-30', 'sobota');
   assert.equal(displayWeekMonday('2026-11-29'), '2026-11-30', 'niedziela');
   assert.equal(displayWeekMonday(''), '');
+
+  // W piatek rano (przed koncem lekcji) zostaje biezacy tydzien.
+  assert.equal(
+    displayWeekMonday('2026-11-27', { nowMins: 600, dayEndMins: 635 }),
+    '2026-11-23',
+    'piatek w trakcie lekcji'
+  );
+  assert.equal(
+    displayWeekMonday('2026-11-27', { nowMins: 636, dayEndMins: 635 }),
+    '2026-11-30',
+    'piatek po ostatniej lekcji'
+  );
+});
+
+test('buildSchoolOverlay: w piatek rano zostaje dzisiejszy dzien', () => {
+  const raw = {
+    exams: [
+      { id: 'a', date: '2026-11-27', lesson: 1, subject: 'Matematyka', type: 'Kartkówka' },
+      { id: 'b', date: '2026-11-27', lesson: 3, subject: 'Matematyka', type: 'Sprawdzian' },
+      { id: 'c', date: '2026-11-30', lesson: 1, subject: 'Biologia', type: 'Sprawdzian' }
+    ]
+  };
+  const DAYS = [
+    { dayNum: 1, name: 'Poniedziałek' }, { dayNum: 2, name: 'Wtorek' },
+    { dayNum: 3, name: 'Środa' }, { dayNum: 4, name: 'Czwartek' }, { dayNum: 5, name: 'Piątek' }
+  ];
+  // Piątek 27.11, 9:00: lekcja 1 (do 8:45) już się odbyła, lekcja 3 (do 10:35) jeszcze nie.
+  const morning = buildSchoolOverlay(raw, {
+    todayIso: '2026-11-27', nowMins: 540, dayEndMins: 635, times: TIMES, dayMeta: DAYS
+  });
+  assert.equal(morning.monday, '2026-11-23');
+  assert.equal(morning.from, '2026-11-27');
+  assert.equal(morning.count.exams, 1, 'zostaje tylko sprawdzian z lekcji, ktora sie nie skonczyla');
+  assert.equal(morning.days[4].slots[2].exams[0].id, 'b');
+  assert.equal(morning.days[4].slots[0], null, 'kartkówka z 8:45 już się odbyła');
+
+  // Po ostatniej lekcji (10:36) plan przechodzi na następny tydzień.
+  const after = buildSchoolOverlay(raw, {
+    todayIso: '2026-11-27', nowMins: 636, dayEndMins: 635, times: TIMES, dayMeta: DAYS
+  });
+  assert.equal(after.monday, '2026-11-30');
+  assert.equal(after.from, '2026-11-28');
+  assert.equal(after.count.exams, 1);
+  assert.equal(after.days[0].slots[0].exams[0].id, 'c');
+});
+
+test('buildSchoolOverlay: w tygodniu dzisiejszy wpis znika po swojej lekcji', () => {
+  const raw = { exams: [{ id: 'dzis', date: '2026-12-02', lesson: 2, subject: 'Fizyka', type: 'Kartkówka' }] };
+  const DAYS = [
+    { dayNum: 1, name: 'Poniedziałek' }, { dayNum: 2, name: 'Wtorek' },
+    { dayNum: 3, name: 'Środa' }, { dayNum: 4, name: 'Czwartek' }, { dayNum: 5, name: 'Piątek' }
+  ];
+  const during = buildSchoolOverlay(raw, {
+    todayIso: '2026-12-02', nowMins: 550, dayEndMins: 635, times: TIMES, dayMeta: DAYS
+  });
+  assert.equal(during.from, '2026-12-02');
+  assert.equal(during.days[2].slots[1].exams[0].id, 'dzis');
+
+  const afterLesson = buildSchoolOverlay(raw, {
+    todayIso: '2026-12-02', nowMins: 580, dayEndMins: 635, times: TIMES, dayMeta: DAYS
+  });
+  assert.equal(afterLesson.count.exams, 0, 'po dzwonku wpis znika');
 });
 
 test('znacznik sprawdzianu zaleznie od typu', () => {

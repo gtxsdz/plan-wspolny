@@ -80,7 +80,7 @@ test('resolveExamLesson: bez planu dnia szuka w planie tygodniowym', () => {
   );
 });
 
-test('buildSchoolPayload: okno od jutra, przypisanie lekcji, zmiany i fallback opisu', () => {
+test('buildSchoolPayload: okno od dzisiaj, przypisanie lekcji, zmiany i fallback opisu', () => {
   const exams = [
     { id: '1', date: '2026-11-27', subject: 'Matematyka', type: 'Kartkówka', content: 'dzisiaj', raw: '{"Subject":{"Kod":"matematyka"}}' },
     { id: '2', date: '2026-11-30', subject: 'Wychowanie fizyczne', type: 'Sprawdzian', content: 'koszykówka', teacher: 'E. Szczepańska', raw: '{"Subject":{"Kod":"wf"}}' },
@@ -103,13 +103,14 @@ test('buildSchoolPayload: okno od jutra, przypisanie lekcji, zmiany i fallback o
     now: 1764500000000
   });
 
-  assert.equal(payload.window.from, '2026-11-28');
+  assert.equal(payload.window.from, '2026-11-27');
   assert.equal(payload.window.to, '2026-12-18');
   assert.equal(payload.source, 'katarzyna');
   assert.equal(payload.updatedAt, 1764500000000);
-  assert.deepEqual(counts, { exams: 1, changes: 2 });
+  assert.deepEqual(counts, { exams: 2, changes: 2 });
 
-  assert.equal(payload.exams['1'], undefined, 'dzisiejszy sprawdzian jest odsiany');
+  assert.equal(payload.exams['1'].lesson, 1, 'dzisiejszy wpis zostaje - aplikacja ukryje go po lekcji');
+  assert.equal(payload.exams['1'].subject, 'Matematyka');
   assert.equal(payload.exams['3'], undefined, 'wpis poza oknem jest odsiany');
   assert.equal(payload.exams['4'], undefined, 'przedmiot bez lekcji w planie jest pominiety');
   assert.equal(payload.exams['2'].lesson, 5);

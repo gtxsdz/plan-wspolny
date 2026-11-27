@@ -30,9 +30,9 @@ Plan z `config.js` jest rysowany od razu po wczytaniu strony, więc nigdy nie ma
 
 ## Sprawdziany i zmiany planu z eDzienniczka
 
-Plan pokazuje sprawdziany, kartkówki i zmiany planu (zastępstwa, odwołane lekcje, przeniesienia) na najbliższy tydzień — **zaczynając od dnia następnego**, więc wpis z dnia, który minął, znika sam. Na kafelku jest znacznik: 📝 sprawdzian/praca klasowa, ✏️ kartkówka, 🔄 zmiana w planie. Klik lub dotknięcie otwiera dymek z typem, datą, numerem lekcji, salą, materiałem i nauczycielem. Na telefonie zamiast rogu kafelka jest pełnowidthowy pasek pod lekcją, a dymek wysuwa się od dołu ekranu.
+Plan pokazuje sprawdziany, kartkówki i zmiany planu (zastępstwa, odwołane lekcje, przeniesienia) na najbliższy tydzień — **od dziś do końca pokazywanego tygodnia**. Wpis z lekcji, która już się skończyła, znika sam (aplikacja zna godziny dzwonków), a po północy nie ma go już także w bazie. Na kafelku jest znacznik: 📝 sprawdzian/praca klasowa, ✏️ kartkówka, 🔄 zmiana w planie. Klik lub dotknięcie otwiera dymek z typem, datą, numerem lekcji, salą, materiałem i nauczycielem. Na telefonie zamiast rogu kafelka jest pełnowidthowy pasek pod lekcją, a dymek wysuwa się od dołu ekranu.
 
-Pon–czw widać bieżący tydzień, pt–niedz kolejny tydzień szkolny (żeby w piątek nie było pustej tablicy). Daty są wpisane w nagłówki kolumn, a legenda pod nagłówkiem podaje zakres i godzinę aktualizacji.
+Pon–czw widać bieżący tydzień. W piątek plan zostaje na dzisiejszym dniu **do końca ostatniej lekcji**, a dopiero potem przechodzi na następny tydzień szkolny (w sobotę i niedzielę od razu widać kolejny tydzień). Daty są wpisane w nagłówki kolumn, a legenda pod nagłówkiem podaje zakres i godzinę aktualizacji.
 
 Dane biorą się z lokalnej bazy eDzienniczka (`~/.config/eduvulcan/data-<pupilId>.db`) i trafiają do węzła `school` w RTDB każdej klasy: odczyt publiczny, zapis wyłącznie z hosta (konto Google właściciela projektu, reguła `.write: false`). Mapowanie kont i nazw przedmiotów jest w `config.js` (`school.account`, `school.aliases`) — dopisz alias, gdy dziennik użyje nowej nazwy przedmiotu.
 
@@ -43,7 +43,7 @@ eduvulcan sync --account katarzyna && eduvulcan sync --account wiktoria
 npm run publish:school                  # --dry-run, --json, --quiet, --class=5a
 ```
 
-Wpis w cronie (`~/.hermes/scripts/plan-overlay-publish.sh`) robi to samo co 30 minut w godzinach 6–22. Narzędzie publikuje okno od jutra do +21 dni, więc baza nie gromadzi sprawdzianów, które już się odbyły.
+Wpis w cronie (`~/.hermes/scripts/plan-overlay-publish.sh`) robi to samo co 30 minut w godzinach 6–22. Narzędzie publikuje okno od dziś do +21 dni; dzisiejsze wpisy po swoich lekcjach ukrywa aplikacja, a następnego dnia znikają z bazy przy kolejnej publikacji.
 
 ## Bezpieczeństwo
 

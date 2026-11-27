@@ -71,6 +71,9 @@ let noticeSource = null;
 let schoolRaw = null;
 let overlayToday = warsawToday();
 let schoolOverlay = buildSchoolOverlay(null, { todayIso: overlayToday, times: TIMES, dayMeta: DAY_META });
+// Minuta, w ktorej trzeba przeliczyc nakladke: koniec lekcji z dzisiejszym
+// wpisem albo (w piatek) koniec zajec i przejscie na nastepny tydzien.
+let overlayRefreshAt = Number.POSITIVE_INFINITY;
 
 // Komunikaty dla uzytkownika wystawia boot-fallback.js (dziala takze wtedy,
 // gdy app.js w ogole sie nie uruchomi).
@@ -245,13 +248,48 @@ function getWarsawTime() {
 }
 
 // --- Znaczniki sprawdzianow i zmian w planie --------------------------------
+// Koniec ostatniej lekcji dnia (0, gdy dzien wolny) - po nim w piatek plan
+// przechodzi na nastepny tydzien.
+function currentDayEndMins() {
+  const { day } = getWarsawTime();
+  const lessons = daysData[day - 1]?.lessons;
+  if (!Array.isArray(lessons)) return 0;
+  let last = -1;
+  lessons.forEach((l, i) => { if (l && !l.empty) last = i; });
+  return last >= 0 ? Number(TIMES[last]?.e) || 0 : 0;
+}
+
+// Najblizszy moment, w ktorym nakladka sie zmieni: koniec lekcji z dzisiejszym
+// sprawdzianem/zmiana albo koniec zajec w piatek.
+function nextOverlayRefreshAt(nowMins, dayEndMins) {
+  let next = Number.POSITIVE_INFINITY;
+  const dayIdx = currentDayIndex();
+  if (dayIdx < 0) return next;
+  const dayOverlay = schoolOverlay?.days?.[dayIdx];
+  if (dayOverlay) {
+    dayOverlay.slots.forEach((slot, slotIndex) => {
+      if (!slot) return;
+      const end = Number(TIMES[slotIndex]?.e);
+      if (Number.isFinite(end) && end > nowMins) next = Math.min(next, end);
+    });
+  }
+  const { day } = getWarsawTime();
+  if (day === 5 && nowMins <= dayEndMins) next = Math.min(next, dayEndMins + 1);
+  return next;
+}
+
 function refreshOverlay() {
   overlayToday = warsawToday();
+  const { mins } = getWarsawTime();
+  const dayEndMins = currentDayEndMins();
   schoolOverlay = buildSchoolOverlay(schoolRaw, {
     todayIso: overlayToday,
+    nowMins: mins,
+    dayEndMins,
     times: TIMES,
     dayMeta: DAY_META
   });
+  overlayRefreshAt = nextOverlayRefreshAt(mins, dayEndMins);
   renderLegend();
 }
 
@@ -338,7 +376,9 @@ function renderLegend() {
   }
   const count = schoolOverlay?.count || { exams: 0, changes: 0 };
   const range = schoolOverlay?.from && schoolOverlay?.to
-    ? `${shortDate(schoolOverlay.from)}–${shortDate(schoolOverlay.to)}`
+    ? (schoolOverlay.from === schoolOverlay.to
+      ? shortDate(schoolOverlay.from)
+      : `${shortDate(schoolOverlay.from)}–${shortDate(schoolOverlay.to)}`)
     : '';
   let html = '';
   if (!count.exams && !count.changes) {
@@ -550,8 +590,10 @@ function markLesson(slotIndex, day, cssClass, badgeText) {
 }
 
 function updateStatus() {
-  // Po polnocy zmienia sie tydzien i znaczniki - odswiezamy je bez przeladowania strony.
-  if (warsawToday() !== overlayToday) {
+  const { mins } = getWarsawTime();
+  // Polnoc zmienia tydzien, a koniec lekcji usuwa dzisiejszy wpis; w piatek po
+  // ostatniej lekcji plan przechodzi na nastepny tydzien - bez przeladowania.
+  if (warsawToday() !== overlayToday || mins >= overlayRefreshAt) {
     refreshOverlay();
     renderDesktop();
     renderMobile();
@@ -561,7 +603,6 @@ function updateStatus() {
     e.removeAttribute('data-badge');
   });
 
-  const { mins } = getWarsawTime();
   const dayIdx = currentDayIndex();
 
   // Wyswietlany tydzien nie zawiera dzisiejszej daty (np. piatek -> przyszly
