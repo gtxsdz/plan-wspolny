@@ -21,7 +21,7 @@ import {
   RELOADED_KEY,
   CHECK_INTERVAL_MS,
   parseVersion,
-  isStale,
+  needsReload,
   shouldCheck,
   reloadHref,
   versionLabel
@@ -110,7 +110,12 @@ function clearNotice(source) {
 // ma nowsza wersje, przechodzimy na nia sama. Trwajaca edycje planu konczymy
 // komunikatem, a nie przeladowaniem w polowie pracy.
 const VERSION_FILE = 'version.json';
+// Chwila wczytania strony: karta, ktora nie zna swojej wersji, porownuje z nia
+// czas wdrozenia z version.json (patrz needsReload w lib/update-check.js).
+const PAGE_LOADED_AT = Date.now();
 let versionCheckBusy = false;
+// Zapis planu do bazy w trakcie - nie wolno wtedy przeladowywac strony.
+let saveInFlight = false;
 
 function storageGet(key) {
   try { return window.sessionStorage.getItem(key); } catch { return null; }
@@ -126,8 +131,9 @@ async function fetchDeployedVersion() {
   return parseVersion(await res.json());
 }
 
-// Otwarty modal edycji albo logowania - wtedy nie przerywamy pracy uzytkownika.
-function dialogOpen() {
+// Otwarty modal albo trwajacy zapis - wtedy nie przerywamy pracy uzytkownika.
+function userBusy() {
+  if (saveInFlight) return true;
   const open = el => !!el && !el.hidden && getComputedStyle(el).display !== 'none';
   return open(document.getElementById('editOverlay')) || open(document.getElementById('loginOverlay'));
 }
@@ -148,16 +154,20 @@ async function checkDeployedVersion(force) {
     storageSet(CHECKED_KEY, new Date(now).toISOString());
     if (!remote) return; // brak pliku (praca lokalna) - nie ma czego porownywac
 
-    const seen = storageGet(SEEN_KEY);
-    if (!isStale(seen, remote.sha) || storageGet(RELOADED_KEY) === remote.sha) {
+    const reload = needsReload({
+      seen: storageGet(SEEN_KEY),
+      remote,
+      loadedAt: PAGE_LOADED_AT,
+      reloadedFor: storageGet(RELOADED_KEY)
+    });
+    if (!reload) {
       storageSet(SEEN_KEY, remote.sha);
       return;
     }
-    if (dialogOpen()) {
+    if (userBusy()) {
       showNotice(`Jest nowsza wersja planu (${versionLabel(remote)}). Odśwież stronę po zapisaniu zmian.`, 'version', false);
       return;
     }
-    storageSet(SEEN_KEY, remote.sha);
     reloadToVersion(remote.sha);
   } catch (err) {
     // Brak sieci nie moze przeszkadzac w ogladaniu planu.
@@ -876,6 +886,9 @@ function setupEvents() {
   btnSave.addEventListener('click', async () => {
     btnSave.disabled = true;
     btnSave.textContent = '⏳ Zapisuję...';
+    // Przeladowanie na nowa wersje czeka, dopoki zapis sie nie skonczy - nawet
+    // gdy ktos zamknie okno edycji, zanim baza odpowie.
+    saveInFlight = true;
     try {
       const updated = collectForm();
       await saveData(updated);
@@ -894,6 +907,8 @@ function setupEvents() {
       saveStatus.style.display = 'flex';
       btnSave.disabled = false;
       btnSave.textContent = '💾 Zapisz';
+    } finally {
+      saveInFlight = false;
     }
   });
 }
