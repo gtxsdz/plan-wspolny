@@ -507,6 +507,13 @@ function openTip(dayIndex, slotIndex) {
       time ? time.dTime : '',
       lesson && lesson.room && lesson.room !== '—' ? `sala ${lesson.room}` : ''
     ].filter(Boolean).join(' · ');
+    // Zmiana moze przenosic lekcje na inna godzine - bez tego w dymku nie ma
+    // informacji, kiedy ta lekcja naprawde sie odbedzie.
+    const movedTo = Number(change.newLesson);
+    const movedSlot = Number.isInteger(movedTo) && movedTo >= 1 ? TIMES[movedTo - 1] : null;
+    const moved = movedTo >= 1
+      ? `przeniesiona na lekcję ${movedSlot ? movedSlot.num : movedTo}${movedSlot ? ` · ${movedSlot.dTime}` : ''}${change.time ? ` (${change.time})` : ''}`
+      : (change.time ? `godzina ${change.time}` : '');
     items.push(`<div class="tip-item">
       <div class="tip-head">
         <span class="tip-ico">🔄</span>
@@ -514,6 +521,7 @@ function openTip(dayIndex, slotIndex) {
       </div>
       <div class="tip-meta">${esc(when)}${meta ? ` · ${esc(meta)}` : ''}</div>
       <div class="tip-material">${esc(change.opis)}</div>
+      ${moved ? `<div class="tip-extra">${esc(moved)}</div>` : ''}
       ${change.effect ? `<span class="tip-chip">${esc(change.effect)}</span>` : ''}
     </div>`);
   });
