@@ -643,8 +643,14 @@ function renderTabs() {
   if (idx >= 0) {
     const today = daysData[idx];
     const activeLessons = today ? today.lessons.map((l, i) => ({ l, i })).filter(x => x.l && !x.l.empty) : [];
-    const lastEnd = activeLessons.length ? TIMES[activeLessons[activeLessons.length - 1].i].e : 840;
-    init = mins > lastEnd ? (idx < daysData.length - 1 ? idx + 2 : 1) : idx + 1;
+    // Ten sam "koniec dnia" co w nakladce: lekcje z planu + dzisiejsze wpisy
+    // z dziennika (np. siodma godzina dopisana w dzienniku). Bez tego zakladka
+    // przeskoczylaby na kolejny dzien przed taka lekcja.
+    const endMins = Math.max(
+      activeLessons.length ? TIMES[activeLessons[activeLessons.length - 1].i].e : 840,
+      journalDayEndMins(schoolRaw, overlayToday, TIMES)
+    );
+    init = mins > endMins ? (idx < daysData.length - 1 ? idx + 2 : 1) : idx + 1;
   } else {
     const nextIdx = nextSchoolDayIndex();
     if (nextIdx >= 0) init = nextIdx + 1;
@@ -924,6 +930,9 @@ function setupEvents() {
 
   document.getElementById('editBtn').addEventListener('click', () => {
     if (!isAdmin) return;
+    // Trwajacy zapis nie pozwala otworzyc formularza od nowa: po zakonczeniu
+    // stara sesja zamyka wciaz otwarty modal i nadpisuje wspolny stan.
+    if (saveInFlight) return;
     buildEditForm();
     // Punkt odniesienia: co formularz pokazywal w chwili otwarcia.
     editBaseline = collectForm();

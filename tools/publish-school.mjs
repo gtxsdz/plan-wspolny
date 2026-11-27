@@ -66,8 +66,55 @@ function dbPathFor(pupilId) {
   const perPupil = path.join(CONFIG_DIR, `data-${pupilId}.db`);
   if (existsSync(perPupil)) return perPupil;
   const single = path.join(CONFIG_DIR, 'data.db');
-  if (existsSync(single)) return single;
+  if (existsSync(single)) {
+    // Legacy baza nie jest powiazana z konkretnym uczniem - czytamy z niej tylko
+    // wtedy, gdy NIE ma zadnej per-uczen bazy, i tylko gdy jest pusta albo ma
+    // wpis meta o uczniu. Inaczej moglibysmy opublikowac cudze dane.
+    const exists = dbFileHasPupil(single, pupilId);
+    if (exists === true) return single;
+    if (exists === null && isDbEmpty(single)) return single;
+    throw new Error(
+      `Legacy data.db nie jest powiazana z uczniem ${pupilId} ani nie jest pusta - sprobuj zsynchronizowac eDzienniczek (eduvulcan sync).`
+    );
+  }
   throw new Error(`Brak bazy dziennika dla ucznia ${pupilId} (szukano ${perPupil}).`);
+}
+
+// Zwraca true, gdy baza ma wpis meta o uczniu; false, gdy ma dane innego ucznia;
+// null, gdy nie ma tabeli meta (nie wiemy, czyja to baza).
+function dbFileHasPupil(file, pupilId) {
+  try {
+    const db = new DatabaseSync(file, { readOnly: true });
+    try {
+      const meta = db.prepare("select value from meta where key = 'pupil'").get();
+      if (!meta || !meta.value) return null;
+      const parsed = JSON.parse(meta.value);
+      return String(parsed?.id) === String(pupilId);
+    } finally {
+      db.close();
+    }
+  } catch (e) {
+    return null;
+  }
+}
+
+function isDbEmpty(file) {
+  try {
+    const db = new DatabaseSync(file, { readOnly: true });
+    try {
+      for (const table of ['exams', 'plan', 'plan_changes']) {
+        try {
+          const n = db.prepare(`select count(*) n from ${table}`).get().n;
+          if (n > 0) return false;
+        } catch (e) { /* tabela moze nie istniec w starej bazie */ }
+      }
+      return true;
+    } finally {
+      db.close();
+    }
+  } catch (e) {
+    return false;
+  }
 }
 
 function readRows(cfg, account, pupilId, todayIso) {

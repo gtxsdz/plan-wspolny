@@ -31,6 +31,7 @@ test('resolvePlanSubject: aliasy obu klas i nazwy nieznane', () => {
   assert.equal(resolvePlanSubject('obiekty małej architektury krajobrazu', CLASS_4TA), 'ob. małej arch.');
   assert.equal(resolvePlanSubject('projekty obiektów architektury krajobrazu', CLASS_4TA), 'proj. ob. arch.');
   assert.equal(resolvePlanSubject('język angielski w architekturze krajobrazu', CLASS_4TA), 'j. ang. w arch.');
+  assert.equal(resolvePlanSubject('Język polski', CLASS_4TA), 'j. polski');
 
   assert.equal(resolvePlanSubject('Edukacja dla bezpieczeństwa', CLASS_5A), '');
   assert.equal(resolvePlanSubject('', CLASS_5A), '');

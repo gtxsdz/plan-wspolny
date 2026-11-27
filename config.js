@@ -143,6 +143,7 @@ export const CLASS_4TA = {
     account: 'wiktoria',
     aliases: {
       'język angielski': 'j. angielski',
+      'język polski': 'j. polski',
       'wychowanie fizyczne': 'wf',
       'zajęcia z wychowawcą': 'zaj. z wychowawcą',
       'zaj. wych.': 'zaj. z wychowawcą',
