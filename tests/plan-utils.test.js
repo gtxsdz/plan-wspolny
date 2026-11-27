@@ -503,3 +503,16 @@ test('journalDayEndMins: dzisiejszy wpis na pozniejszej lekcji przedluza dzien',
   assert.equal(journalDayEndMins({ exams: { x: { date: '2026-12-07', lesson: 99 } } }, '2026-12-07', TIMES), 0, 'lekcja poza slotami');
   assert.equal(journalDayEndMins({ changes: { y: { date: '2026-12-07', lesson: 0 } } }, '2026-12-07', TIMES), 0);
 });
+
+test('zmiana przeniesiona na pozniejsza lekcje zyje do konca lekcji docelowej', () => {
+  // lekcja 1 przeniesiona na 6: o 8:50 (po 1. lekcji) wpis nadal widoczny
+  const raw = { changes: { c1: { id: 'c1', date: '2026-12-07', lesson: 1, newLesson: TIMES.length, subject: 'WF', opis: 'przeniesiona' } } };
+  const dayMeta = [{ dayNum: 1, name: 'Poniedziałek' }];
+  const dayEnd = TIMES[TIMES.length - 1].e;
+  const visible = buildSchoolOverlay(raw, { todayIso: '2026-12-07', nowMins: TIMES[0].e + 5, dayEndMins: dayEnd, times: TIMES, dayMeta });
+  assert.equal(visible.days[0].slots[0].changes.length, 1, 'wpis zostaje po pierwotnej lekcji');
+  const afterTarget = buildSchoolOverlay(raw, { todayIso: '2026-12-07', nowMins: dayEnd + 1, dayEndMins: dayEnd, times: TIMES, dayMeta });
+  assert.equal(afterTarget.days[0].slots[0] ?? null, null, 'wpis znika po lekcji docelowej');
+  // koniec dnia liczony po lekcji docelowej
+  assert.equal(journalDayEndMins(raw, '2026-12-07', TIMES), TIMES[TIMES.length - 1].e);
+});
