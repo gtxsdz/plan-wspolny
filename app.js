@@ -928,6 +928,14 @@ function setupEvents() {
   document.getElementById('btnCancel').addEventListener('click', closeEdit);
   editOverlay.addEventListener('click', e => { if (e.target === editOverlay) closeEdit(); });
 
+  // Na czas zapisu blokujemy wszystkie pola formularza: zmiany wpisane po
+  // kliknieciu Zapisz nie zmiescilyby sie w wyslanej kopii i zginelyby.
+  const setEditorBusy = (busy) => {
+    editOverlay.querySelectorAll('.es, .er, .empty-toggle, .tab-btn').forEach(el => {
+      el.disabled = busy;
+    });
+  };
+
   document.getElementById('editBtn').addEventListener('click', () => {
     if (!isAdmin) return;
     // Trwajacy zapis nie pozwala otworzyc formularza od nowa: po zakonczeniu
@@ -945,6 +953,9 @@ function setupEvents() {
   });
 
   btnSave.addEventListener('click', async () => {
+    // Formularz zamykamy od razu, zeby nikt nie edytowal w trakcie zapisu:
+    // zmiany wpisane po kliknieciu Zapisz i tak nie zmiescilyby sie w wyslanej
+    // kopii, a stara sesja zamykala formularz po zakonczeniu zapisu.
     const updated = collectForm();
     const changed = changedDays(editBaseline, updated);
     if (!changed.length) {
@@ -958,6 +969,7 @@ function setupEvents() {
     const conflicts = conflictDays(editBaseline, daysData, changed);
     btnSave.disabled = true;
     btnSave.textContent = '⏳ Zapisuję...';
+    setEditorBusy(true);
     // Przeladowanie na nowa wersje czeka, dopoki zapis sie nie skonczy - nawet
     // gdy ktos zamknie okno edycji, zanim baza odpowie.
     saveInFlight = true;
@@ -979,6 +991,7 @@ function setupEvents() {
       saveStatus.style.display = 'flex';
       btnSave.disabled = false;
       btnSave.textContent = '💾 Zapisz';
+      setEditorBusy(false);
     } finally {
       saveInFlight = false;
     }
