@@ -18,6 +18,7 @@ import {
   conflictDays,
   mobileSlotIndexes,
   journalDayEndMins,
+  overlaySlotEndMins,
   dayTimeRange,
   subjectOptionsFor,
   activeBadge,
@@ -515,4 +516,12 @@ test('zmiana przeniesiona na pozniejsza lekcje zyje do konca lekcji docelowej', 
   assert.equal(afterTarget.days[0].slots[0] ?? null, null, 'wpis znika po lekcji docelowej');
   // koniec dnia liczony po lekcji docelowej
   assert.equal(journalDayEndMins(raw, '2026-12-07', TIMES), TIMES[TIMES.length - 1].e);
+});
+
+test('overlaySlotEndMins: przeniesiona lekcja trzyma wpis do konca lekcji docelowej', () => {
+  const slot = { exams: [], changes: [{ lesson: 1, newLesson: 3 }] };
+  assert.equal(overlaySlotEndMins(slot, 0, TIMES), TIMES[2].e);
+  assert.equal(overlaySlotEndMins({ exams: [], changes: [] }, 0, TIMES), TIMES[0].e);
+  assert.equal(overlaySlotEndMins(null, 0, TIMES), 0);
+  assert.equal(overlaySlotEndMins({ changes: [{ newLesson: 99 }] }, 1, TIMES), TIMES[1].e, 'lekcja poza slotami ignorowana');
 });

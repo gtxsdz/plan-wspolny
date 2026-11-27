@@ -35,6 +35,7 @@ import {
   conflictDays,
   mobileSlotIndexes,
   journalDayEndMins,
+  overlaySlotEndMins,
   subjectOptionsFor,
   activeBadge,
   nextBadge,
@@ -402,8 +403,10 @@ function nextOverlayRefreshAt(nowMins, dayEndMins) {
   if (dayOverlay) {
     dayOverlay.slots.forEach((slot, slotIndex) => {
       if (!slot) return;
-      const end = Number(TIMES[slotIndex]?.e);
-      if (Number.isFinite(end) && end > nowMins) next = Math.min(next, end);
+      // Zmiana przeniesiona na pozniejsza lekcje zyje do jej konca, wiec i
+      // przeliczenie nakladki musi wypasc wtedy, a nie po lekcji pierwotnej.
+      const end = overlaySlotEndMins(slot, slotIndex, TIMES);
+      if (end > nowMins) next = Math.min(next, end);
     });
   }
   const { day } = getWarsawTime();
