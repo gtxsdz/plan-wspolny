@@ -168,7 +168,8 @@ async function checkDeployedVersion(force) {
     const reload = needsReload({
       remote,
       loadedAt: PAGE_LOADED_AT,
-      reloadedFor: storageGet(RELOADED_KEY)
+      reloadedFor: storageGet(RELOADED_KEY),
+      now
     });
     if (!reload) return;
     if (userBusy()) {

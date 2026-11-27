@@ -63,7 +63,7 @@ test('versionLabel pokazuje krotki skrot commita, a bez niego date wdrozenia', (
 
 const LOADED_AT = Date.parse('2026-11-27T12:00:00Z');
 const remote = (sha, built = '2026-11-27T11:00:00Z') => ({ sha, built });
-const reloadArgs = (over = {}) => ({ remote: remote('bbb'), loadedAt: LOADED_AT, reloadedFor: null, ...over });
+const reloadArgs = (over = {}) => ({ remote: remote('bbb'), loadedAt: LOADED_AT, reloadedFor: null, now: LOADED_AT, ...over });
 
 test('needsReload: przeladowanie tylko gdy wersja z serwera powstala po wczytaniu karty', () => {
   // wdrozenie 2 min po wczytaniu strony - karta jest stara (ten przypadek ginal
@@ -74,6 +74,17 @@ test('needsReload: przeladowanie tylko gdy wersja z serwera powstala po wczytani
   assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T11:59:00Z') })), false);
   // w granicach zapasu na zegary nie przeladowujemy
   assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T12:00:30Z') })), false);
+});
+
+test('needsReload: zapas na zegary tylko na poczatku, potem wdrozenie jest wykrywane', () => {
+  // wdrozenie 30 s po wczytaniu karty: w pierwszych 60 s nie ufamy porownaniu,
+  // ale po tym czasie ta sama karta ma je wykryc (wczesniej wypadalo na zawsze)
+  const built = remote('bbb', '2026-11-27T12:00:30Z');
+  assert.equal(needsReload(reloadArgs({ remote: built, now: LOADED_AT + 10_000 })), false);
+  assert.equal(needsReload(reloadArgs({ remote: built, now: LOADED_AT + 60_000 })), true);
+  assert.equal(needsReload(reloadArgs({ remote: built, now: LOADED_AT + 5 * 60_000 })), true);
+  // wdrozenie przed wczytaniem zostaje nienaruszone
+  assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T11:59:00Z'), now: LOADED_AT + 5 * 60_000 })), false);
 });
 
 test('needsReload: blokada petli, brak danych i smieci', () => {
