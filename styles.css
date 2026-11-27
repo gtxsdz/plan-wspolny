@@ -326,3 +326,105 @@ body.dark-mode .app-notice.err { background: #4a2222; color: #ffc2c2; border-col
 .save-status { font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 8px; display: none; }
 .save-status.ok { display: flex; background: #d4edda; color: #2d6a4f; }
 .save-status.err { display: flex; background: #fce4e4; color: #8b1a1a; }
+
+/* --------------------------------------------------------------------------
+   NAKLADKA Z DZIENNIKA: sprawdziany, kartkowki i zmiany w planie
+   Daty w naglowkach kolumn + znaczniki na kafelkach (desktop) i paski pod
+   lekcja (telefon). Klik/dotkniecie otwiera dymek ze szczegolami.
+   -------------------------------------------------------------------------- */
+td.cell { position: relative; }
+.ov-pins { position: absolute; top: -7px; left: -5px; display: flex; gap: 3px; z-index: 6; }
+.ov-pin {
+  min-width: 22px; height: 22px; padding: 0 4px; border-radius: 999px;
+  border: 2px solid var(--border-th); background: #fff3cf; color: #5a3d1e;
+  font-family: inherit; font-size: 11px; line-height: 1; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,.18);
+  transition: transform .15s, box-shadow .15s;
+}
+.ov-pin.ov-exam { background: #ffe08a; border-color: #d9a521; }
+.ov-pin.ov-change { background: #e3f1ff; border-color: #7fb2e6; }
+.ov-pin:hover { transform: translateY(-1px); box-shadow: 0 3px 7px rgba(0,0,0,.24); }
+.ov-pin .ov-count { font-size: 9px; font-weight: 900; opacity: .85; }
+body.dark-mode .ov-pin.ov-exam { background: #4a3a10; border-color: #c9a55f; color: #ffe6a7; }
+body.dark-mode .ov-pin.ov-change { background: #1e3348; border-color: #4e7fa8; color: #cfe6ff; }
+
+/* Data w naglowku kolumny/dnia */
+thead th .dh-date { display: block; margin-top: 1px; font-size: 11px; font-weight: 900; color: var(--text-main); letter-spacing: .3px; }
+.day-header .dh-date { display: inline-block; margin-left: 7px; font-size: 12px; font-weight: 900; color: var(--text-main); }
+thead th.today, .day-header.today { box-shadow: inset 0 0 0 3px rgba(255,71,87,.5); }
+.day-header.today { box-shadow: inset 0 0 0 3px rgba(255,71,87,.5); }
+
+/* Legenda pod naglowkiem */
+.ov-legend {
+  display: flex; flex-wrap: wrap; gap: 3px 12px; justify-content: center; align-items: center;
+  margin: -4px 0 14px; padding: 7px 12px; border-radius: 10px;
+  background: var(--bg-banner); border: 1px solid var(--border-banner);
+  font-size: 11.5px; color: var(--text-muted); line-height: 1.35;
+}
+.ov-legend[hidden] { display: none; }
+.ovl-keys { font-weight: 800; color: var(--text-header); }
+.ovl-range { opacity: .9; }
+
+/* Telefon: lekcja + pasek sprawdzianu/zmiany pod nia */
+.lesson-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.lesson-main .lesson-info { width: 100%; }
+.ov-line {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 7px 8px; border-radius: 9px; cursor: pointer;
+  font-family: inherit; font-size: 11.5px; font-weight: 800; line-height: 1.2;
+  border: 2px solid #d9a521; background: #fff3cf; color: #5a3d1e;
+  transition: transform .15s, box-shadow .15s; box-shadow: 0 2px 4px rgba(0,0,0,.1);
+}
+.ov-line.ov-change { border-color: #7fb2e6; background: #eaf4ff; color: #1e3f5c; }
+.ov-line:active { transform: scale(.99); }
+body.dark-mode .ov-line.ov-exam { background: #40340f; border-color: #c9a55f; color: #ffe6a7; }
+body.dark-mode .ov-line.ov-change { background: #1e3348; border-color: #4e7fa8; color: #cfe6ff; }
+.ov-line-ico { font-size: 13px; }
+
+/* Dymek ze szczegolami */
+.tip-overlay {
+  position: fixed; inset: 0; z-index: 1200; display: flex;
+  align-items: center; justify-content: center; padding: 18px;
+  background: rgba(0,0,0,.5);
+}
+.tip-overlay[hidden] { display: none; }
+.tip-box {
+  position: relative; width: 100%; max-width: 430px; max-height: 84vh; overflow: auto;
+  padding: 22px 24px; border-radius: 16px;
+  background: var(--bg-modal); border: 2px solid var(--border-modal);
+  box-shadow: 0 16px 48px rgba(0,0,0,.42); color: var(--text-main);
+}
+.tip-close {
+  position: absolute; top: 10px; right: 12px; width: 34px; height: 34px;
+  border: none; border-radius: 50%; background: rgba(0,0,0,.07);
+  color: var(--text-muted); font-size: 16px; font-weight: 900; cursor: pointer;
+}
+body.dark-mode .tip-close { background: rgba(255,255,255,.1); }
+.tip-item + .tip-item { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border-banner); }
+.tip-head { display: flex; gap: 10px; align-items: flex-start; padding-right: 30px; }
+.tip-ico { font-size: 24px; line-height: 1.05; }
+.tip-title { font-size: 16px; font-weight: 900; color: var(--text-header); }
+.tip-subject { margin-top: 2px; font-size: 13px; font-weight: 800; }
+.tip-meta { margin-top: 9px; font-size: 12.5px; font-weight: 700; color: var(--text-muted); }
+.tip-material { margin-top: 9px; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tip-label { font-weight: 900; color: var(--text-header); }
+.tip-extra { margin-top: 7px; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+.tip-chip {
+  display: inline-block; margin-top: 9px; padding: 2px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; background: #d9ecff; color: #1e3f5c; border: 1px solid #7fb2e6;
+}
+body.dark-mode .tip-chip { background: #1e3348; color: #cfe6ff; border-color: #4e7fa8; }
+
+@media(max-width: 768px) {
+  .tip-overlay { align-items: flex-end; padding: 0; }
+  .tip-box { max-width: 100%; max-height: 86vh; padding: 20px 16px 26px; border-radius: 18px 18px 0 0; }
+  .tip-close { top: 8px; right: 10px; }
+  .ov-legend { margin: 0 0 10px; padding: 6px 9px; font-size: 10.5px; }
+  thead th .dh-date { font-size: 10px; }
+}
+
+/* Widoczny fokus znacznikow (klawiatura) */
+.ov-pin:focus-visible, .ov-line:focus-visible, .tip-close:focus-visible {
+  outline: 3px solid var(--border-active); outline-offset: 2px;
+}

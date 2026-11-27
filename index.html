@@ -25,6 +25,8 @@
         <div class="wych" id="classTeacher"></div>
       </header>
 
+      <div class="ov-legend" id="overlayLegend" hidden></div>
+
       <div class="mobile-tabs" id="mobileTabs"></div>
 
       <table id="scheduleTable">
@@ -67,6 +69,14 @@
         <button type="button" class="btn-cancel" id="btnCancel">Anuluj</button>
         <button type="button" class="btn-save" id="btnSave">💾 Zapisz</button>
       </div>
+    </div>
+  </div>
+
+  <!-- DYMEK ZE SZCZEGOLAMI SPRAWDZIANU / ZMIANY W PLANIE -->
+  <div class="tip-overlay" id="tipOverlay" hidden>
+    <div class="tip-box" role="dialog" aria-modal="true" aria-label="Szczegóły">
+      <button type="button" class="tip-close" id="tipClose" aria-label="Zamknij">✕</button>
+      <div id="tipBody"></div>
     </div>
   </div>
 

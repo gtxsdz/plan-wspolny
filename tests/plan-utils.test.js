@@ -19,6 +19,14 @@ import {
   nextBadge,
   saveErrorMessage,
   authErrorMessage,
+  addISODays,
+  isoWeekday,
+  shortDate,
+  longDate,
+  relativeDay,
+  displayWeekMonday,
+  examMarker,
+  buildSchoolOverlay,
   LIMITS,
   FALLBACK_ICON,
   DEFAULT_ROOM
@@ -213,3 +221,152 @@ test('etykiety lekcji i komunikaty bledow', () => {
   assert.match(authErrorMessage('nieznany-kod'), /Nie udalo sie/);
 });
 
+
+// --- Nakladka z dziennika: daty, sprawdziany, zmiany planu ------------------
+
+test('daty ISO: przesuniecia, dzien tygodnia i formaty', () => {
+  assert.equal(addISODays('2026-11-27', 3), '2026-11-30');
+  assert.equal(addISODays('2026-12-31', 1), '2027-01-01');
+  assert.equal(addISODays('2028-02-28', 1), '2028-02-29', 'rok przestepny');
+  assert.equal(addISODays('2026-11-27', -1), '2026-11-26');
+  assert.equal(addISODays('zla-data', 1), '');
+  assert.equal(addISODays('', 1), '');
+
+  assert.equal(isoWeekday('2026-11-30'), 1);
+  assert.equal(isoWeekday('2026-12-04'), 5);
+  assert.equal(isoWeekday('2026-11-29'), 7);
+  assert.equal(isoWeekday('2026-11-27'), 5);
+  assert.equal(isoWeekday('2026-13-01'), 0, 'niepoprawny miesiac nie liczy sie jako data');
+
+  assert.equal(shortDate('2026-12-02'), '2.12');
+  assert.equal(shortDate('2026-01-09'), '9.1');
+  assert.equal(shortDate(''), '');
+  assert.equal(longDate('2026-12-02'), 'środa, 2.12');
+  assert.equal(longDate('2026-11-30'), 'poniedziałek, 30.11');
+  assert.equal(relativeDay('2026-11-27', '2026-11-27'), 'dziś');
+  assert.equal(relativeDay('2026-11-28', '2026-11-27'), 'jutro');
+  assert.equal(relativeDay('2026-12-02', '2026-11-27'), 'za 5 dni');
+  assert.equal(relativeDay('2026-11-26', '2026-11-27'), 'minęło');
+  assert.equal(relativeDay('', '2026-11-27'), '');
+});
+
+test('wyswietlany tydzien: biezacy od poniedzialku, w piatek nastepny', () => {
+  assert.equal(displayWeekMonday('2026-11-23'), '2026-11-23', 'poniedzialek');
+  assert.equal(displayWeekMonday('2026-11-26'), '2026-11-23', 'czwartek');
+  assert.equal(displayWeekMonday('2026-11-27'), '2026-11-30', 'piatek pokazuje nastepny tydzien');
+  assert.equal(displayWeekMonday('2026-11-28'), '2026-11-30', 'sobota');
+  assert.equal(displayWeekMonday('2026-11-29'), '2026-11-30', 'niedziela');
+  assert.equal(displayWeekMonday(''), '');
+});
+
+test('znacznik sprawdzianu zaleznie od typu', () => {
+  assert.equal(examMarker('Sprawdzian'), '📝');
+  assert.equal(examMarker('Praca klasowa'), '📝');
+  assert.equal(examMarker('Kartkówka'), '✏️');
+  assert.equal(examMarker('Odpowiedź ustna'), '📌');
+  assert.equal(examMarker(null), '📌');
+});
+
+test('buildSchoolOverlay: tylko od jutra, przypisanie do dnia i lekcji', () => {
+  // Sroda 2.12.2026 -> wyswietlany tydzien 30.11-4.12
+  const raw = {
+    updatedAt: 1764500000000,
+    exams: {
+      a: { id: 'a', date: '2026-12-03', lesson: 2, subject: 'Fizyka', type: 'Kartkówka', content: 'FALE' },
+      b: { id: 'b', date: '2026-12-01', lesson: 1, subject: 'Matematyka', type: 'Sprawdzian' },
+      c: { id: 'c', date: '2026-12-07', lesson: 1, subject: 'Biologia', type: 'Sprawdzian' },
+      d: { id: 'd', date: '2026-12-05', lesson: 1, subject: 'Biologia', type: 'Sprawdzian' }
+    },
+    changes: [
+      { id: 'ch1', date: '2026-12-03', lesson: 3, subject: 'Język polski', opis: 'zastępstwo: A → B' },
+      { id: 'ch2', date: '2026-12-04', lesson: 99, subject: 'Język polski', opis: 'poza planem' }
+    ]
+  };
+  const DAYS = [
+    { dayNum: 1, name: 'Poniedziałek' }, { dayNum: 2, name: 'Wtorek' },
+    { dayNum: 3, name: 'Środa' }, { dayNum: 4, name: 'Czwartek' }, { dayNum: 5, name: 'Piątek' }
+  ];
+  const overlay = buildSchoolOverlay(raw, { todayIso: '2026-12-02', times: TIMES, dayMeta: DAYS });
+
+  assert.equal(overlay.monday, '2026-11-30');
+  assert.equal(overlay.from, '2026-12-03');
+  assert.equal(overlay.to, '2026-12-04');
+  assert.deepEqual(overlay.days.map((d) => d.short), ['30.11', '1.12', '2.12', '3.12', '4.12']);
+  assert.equal(overlay.count.exams, 1, 'sprawdzian z 1.12 (przeszlosc) i spoza tygodnia odsiane');
+  assert.equal(overlay.count.changes, 1);
+
+  const wed = overlay.days[2];
+  assert.equal(wed.slots[1], null, 'sprawdzian z dzisiaj nie jest pokazywany');
+
+  const thu = overlay.days[3];
+  assert.equal(thu.slots[1].exams[0].subject, 'Fizyka');
+  assert.equal(thu.slots[1].exams[0].content, 'FALE');
+  assert.equal(thu.slots[2].changes[0].opis, 'zastępstwo: A → B');
+  assert.equal(overlay.updatedAt, 1764500000000);
+});
+
+test('buildSchoolOverlay: w piatek pokazuje przyszly tydzien i czyści przeszlosc', () => {
+  const raw = {
+    exams: [
+      { id: 'a', date: '2026-11-27', lesson: 1, subject: 'Matematyka', type: 'Kartkówka' },
+      { id: 'b', date: '2026-11-30', lesson: 1, subject: 'Matematyka', type: 'Sprawdzian' },
+      { id: 'c', date: '2026-12-04', lesson: 3, subject: 'WF', type: 'Kartkówka' }
+    ]
+  };
+  const DAYS = [
+    { dayNum: 1, name: 'Poniedziałek' }, { dayNum: 2, name: 'Wtorek' },
+    { dayNum: 3, name: 'Środa' }, { dayNum: 4, name: 'Czwartek' }, { dayNum: 5, name: 'Piątek' }
+  ];
+  const overlay = buildSchoolOverlay(raw, { todayIso: '2026-11-27', times: TIMES, dayMeta: DAYS });
+
+  assert.equal(overlay.monday, '2026-11-30');
+  assert.equal(overlay.from, '2026-11-28');
+  assert.equal(overlay.count.exams, 2);
+  assert.equal(overlay.days[0].slots[0].exams[0].date, '2026-11-30');
+  assert.equal(overlay.days[4].slots[2].exams[0].subject, 'WF');
+});
+
+test('buildSchoolOverlay: odporne na smieci i przycina pola', () => {
+  const raw = {
+    exams: [
+      null,
+      'nie-obiekt',
+      { date: 'zla', lesson: 1, subject: 'Matematyka' },
+      { date: '2026-12-03', lesson: 'x', subject: 'Matematyka' },
+      { date: '2026-12-03', lesson: 1, subject: '' },
+      { date: '2026-12-03', lesson: 1, subject: 'M'.repeat(80), type: 'Sprawdzian', content: 'x'.repeat(900) }
+    ],
+    changes: 'nie-tablica'
+  };
+  const DAYS = [
+    { dayNum: 1, name: 'Poniedziałek' }, { dayNum: 2, name: 'Wtorek' },
+    { dayNum: 3, name: 'Środa' }, { dayNum: 4, name: 'Czwartek' }, { dayNum: 5, name: 'Piątek' }
+  ];
+  const overlay = buildSchoolOverlay(raw, { todayIso: '2026-12-02', times: TIMES, dayMeta: DAYS });
+  assert.equal(overlay.count.exams, 1);
+  const exam = overlay.days[3].slots[0].exams[0];
+  assert.equal(exam.subject.length, 40);
+  assert.ok(exam.content.length <= 500);
+  assert.deepEqual(overlay.count, { exams: 1, changes: 0 });
+});
+
+test('buildSchoolOverlay: zmiana bez opisu dostaje czytelne wypelnienie', () => {
+  const overlay = buildSchoolOverlay(
+    { changes: [{ id: 'z', date: '2026-12-03', lesson: 2, subject: 'WF', effect: 'Zastępstwo', subTeacher: 'Jan Nowak' }] },
+    { todayIso: '2026-12-02', times: TIMES, dayMeta: [
+      { dayNum: 1, name: 'Poniedziałek' }, { dayNum: 2, name: 'Wtorek' },
+      { dayNum: 3, name: 'Środa' }, { dayNum: 4, name: 'Czwartek' }, { dayNum: 5, name: 'Piątek' }
+    ] }
+  );
+  assert.equal(overlay.days[3].slots[1].changes[0].opis, 'Zastępstwo · Jan Nowak');
+});
+
+test('buildSchoolOverlay bez danych nadal zwraca daty tygodnia', () => {
+  const overlay = buildSchoolOverlay(null, {
+    todayIso: '2026-11-27', times: TIMES,
+    dayMeta: [{ dayNum: 1, name: 'Poniedziałek' }, { dayNum: 2, name: 'Wtorek' }]
+  });
+  assert.deepEqual(overlay.days.map((d) => d.iso), ['2026-11-30', '2026-12-01']);
+  assert.deepEqual(overlay.count, { exams: 0, changes: 0 });
+  assert.equal(overlay.updatedAt, 0);
+});

@@ -7,6 +7,7 @@
   "scripts": {
     "test": "node --test",
     "check": "node tools/check-syntax.mjs",
+    "publish:school": "node tools/publish-school.mjs",
     "vendor:firebase": "node tools/vendor-firebase.mjs"
   },
   "engines": {

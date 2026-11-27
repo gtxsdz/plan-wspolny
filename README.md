@@ -15,7 +15,8 @@ Lokalnie / na innym adresie można wymusić klasę parametrem: `index.html?klasa
 |---|---|
 | `config.js` | jedyne miejsce z danymi per klasa: konfiguracja Firebase, godziny lekcji, mapy przedmiotów, domyślny plan, nazwa klasy i wychowawca. `resolveActiveClass()` wybiera klasę po adresie |
 | `app.js` | wspólna logika: render (desktop + mobile), edytor, motyw, odliczanie w komórkach, logowanie administratora |
-| `lib/plan-utils.js` | czyste funkcje (escapowanie HTML, scalanie z bazą, zakres godzin, komunikaty błędów) — pokryte testami |
+| `lib/plan-utils.js` | czyste funkcje (escapowanie HTML, scalanie z bazą, zakres godzin, komunikaty błędów, daty i nakładka sprawdzianów) — pokryte testami |
+| `lib/school-source.js` | zamiana wierszy z bazy eDzienniczka (sprawdziany, zmiany planu, plan dnia) na węzeł `school` — bez SQL i HTTP, pokryte testami |
 | `index.html` | wspólny szkielet; tytuł, nagłówek i wychowawca ustawiane dynamicznie |
 | `styles.css` | wspólne style + zmienne motywu jasny/ciemny |
 | `boot-fallback.js` | komunikat awaryjny, gdy `app.js` nie wystartuje (brak sieci, brak plików) |
@@ -27,9 +28,27 @@ Lokalnie / na innym adresie można wymusić klasę parametrem: `index.html?klasa
 
 Plan z `config.js` jest rysowany od razu po wczytaniu strony, więc nigdy nie ma pustej tabeli czekającej na odpowiedź bazy. Gdy odczyt z Realtime Database się nie uda, aplikacja pokazuje kolejno: plan zapamiętany w przeglądarce (tylko jeśli zawiera realne lekcje) albo plan wbudowany w `config.js` — zawsze z komunikatem, że może być nieaktualny.
 
+## Sprawdziany i zmiany planu z eDzienniczka
+
+Plan pokazuje sprawdziany, kartkówki i zmiany planu (zastępstwa, odwołane lekcje, przeniesienia) na najbliższy tydzień — **zaczynając od dnia następnego**, więc wpis z dnia, który minął, znika sam. Na kafelku jest znacznik: 📝 sprawdzian/praca klasowa, ✏️ kartkówka, 🔄 zmiana w planie. Klik lub dotknięcie otwiera dymek z typem, datą, numerem lekcji, salą, materiałem i nauczycielem. Na telefonie zamiast rogu kafelka jest pełnowidthowy pasek pod lekcją, a dymek wysuwa się od dołu ekranu.
+
+Pon–czw widać bieżący tydzień, pt–niedz kolejny tydzień szkolny (żeby w piątek nie było pustej tablicy). Daty są wpisane w nagłówki kolumn, a legenda pod nagłówkiem podaje zakres i godzinę aktualizacji.
+
+Dane biorą się z lokalnej bazy eDzienniczka (`~/.config/eduvulcan/data-<pupilId>.db`) i trafiają do węzła `school` w RTDB każdej klasy: odczyt publiczny, zapis wyłącznie z hosta (konto Google właściciela projektu, reguła `.write: false`). Mapowanie kont i nazw przedmiotów jest w `config.js` (`school.account`, `school.aliases`) — dopisz alias, gdy dziennik użyje nowej nazwy przedmiotu.
+
+Publikacja (host `deb`, Node ≥22, zalogowany `gcloud`):
+
+```bash
+eduvulcan sync --account katarzyna && eduvulcan sync --account wiktoria
+npm run publish:school                  # --dry-run, --json, --quiet, --class=5a
+```
+
+Wpis w cronie (`~/.hermes/scripts/plan-overlay-publish.sh`) robi to samo co 30 minut w godzinach 6–22. Narzędzie publikuje okno od jutra do +21 dni, więc baza nie gromadzi sprawdzianów, które już się odbyły.
+
 ## Bezpieczeństwo
 
 - **Odczyt planu:** publiczny — `schedule` czyta każdy (plan jest informacją publiczną dla uczniów i rodziców).
+- **Odczyt sprawdzianów/zmian:** publiczny (`school`) — te same informacje widać w dzienniku; zapis jest zablokowany dla klientów, a węzeł wypełnia tylko skrypt na hoście.
 - **Zapis planu:** wyłącznie zalogowany użytkownik z wpisem `admins/<uid>` w bazie danego projektu.
 - **Hasło administratora** nie jest przechowywane ani w kodzie, ani w bazie — służy do tego Firebase Authentication (e-mail + hasło).
 - Dane z bazy są escapowane przy wstawianiu do HTML (`esc()`), a pola lekcji zapisywane są z limitami długości zgodnymi z `.validate` w regułach.
@@ -52,6 +71,7 @@ Po wdrożeniu nowych reguł węzły `adminHash` i `daysData` nie są już używa
 
 - `GET https://<baza>/.json` oraz `/adminHash.json` muszą zwracać `Permission denied`.
 - `GET https://<baza>/schedule/days.json` ma zwracać plan (odczyt publiczny).
+- `GET https://<baza>/school.json` ma zwracać sprawdziany i zmiany planu (odczyt publiczny).
 - Nagłówki hostingów: `curl -I https://plan5a.web.app/` → obecne `Content-Security-Policy`, `Cache-Control: no-cache`.
 - `https://plan5a.web.app/database.rules.json` musi zwracać 404 (plik nie jest publikowany).
 

@@ -56,6 +56,21 @@ export const CLASS_5A = {
     'przyroda', 'informatyka', 'technika', 'plastyka', 'muzyka', 'wf', 'basen',
     'religia', 'zaj. z wych.', 'edu. zdrow.'
   ],
+  // Skad brac sprawdziany i zmiany planu (tools/publish-school.mjs).
+  // `account` to konto w eDzienniczku, `aliases` mapuje nazwy przedmiotow
+  // z dziennika na nazwy uzywane w tym planie.
+  school: {
+    account: 'katarzyna',
+    aliases: {
+      'język polski': 'j. polski',
+      'język angielski': 'j. ang',
+      'j. angielski': 'j. ang',
+      'wychowanie fizyczne': 'wf',
+      'zajęcia z wychowawcą': 'zaj. z wych.',
+      'zaj. wych.': 'zaj. z wych.',
+      'edukacja zdrowotna': 'edu. zdrow.'
+    }
+  },
   times: [
     { num: '1', time: '8.00–8.45',   dTime: '8:00–8:45',   s: 480, e: 525 },
     { num: '2', time: '8.55–9.40',   dTime: '8:55–9:40',   s: 535, e: 580 },
@@ -123,6 +138,21 @@ export const CLASS_4TA = {
     'biologia', 'r_biologia', 'fizyka', 'chemia', 'wf', 'religia',
     'zaj. z wychowawcą', 'ob. małej arch.', 'proj. ob. arch.', 'prace w ob. arch.'
   ],
+  // Skad brac sprawdziany i zmiany planu (tools/publish-school.mjs).
+  school: {
+    account: 'wiktoria',
+    aliases: {
+      'język angielski': 'j. angielski',
+      'wychowanie fizyczne': 'wf',
+      'zajęcia z wychowawcą': 'zaj. z wychowawcą',
+      'zaj. wych.': 'zaj. z wychowawcą',
+      'język angielski w architekturze krajobrazu': 'j. ang. w arch.',
+      'j.ang.w.arch.kr': 'j. ang. w arch.',
+      'obiekty małej architektury krajobrazu': 'ob. małej arch.',
+      'prace w obiektach architektury krajobrazu': 'prace w ob. arch.',
+      'projekty obiektów architektury krajobrazu': 'proj. ob. arch.'
+    }
+  },
   times: [
     { num: '1',  time: '8.00–8.45',   dTime: '8:00–8:45',    s: 480, e: 525 },
     { num: '2',  time: '8.50–9.35',   dTime: '8:50–9:35',    s: 530, e: 575 },

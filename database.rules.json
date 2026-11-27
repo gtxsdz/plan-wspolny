@@ -23,6 +23,10 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid"
       }
+    },
+    "school": {
+      ".read": true,
+      ".write": false
     }
   }
 }

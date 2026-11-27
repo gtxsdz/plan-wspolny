@@ -26,6 +26,12 @@ import {
   nextBadge,
   saveErrorMessage,
   authErrorMessage,
+  warsawToday,
+  buildSchoolOverlay,
+  examMarker,
+  shortDate,
+  longDate,
+  relativeDay,
   LIMITS,
   EMPTY_ICON,
   FALLBACK_ICON
@@ -58,6 +64,13 @@ let daysData = mergeDays(DAY_META, DEFAULT_LESSONS, null, TIMES, SUBJECT_MAP).da
 let isAdmin = false;
 let activeSubject = null;
 let noticeSource = null;
+
+// --- Nakladka z dziennika: sprawdziany i zmiany w planie -------------------
+// schoolRaw: ostatnie dane z bazy (`school`), schoolOverlay: policzona nakladka
+// dla wyswietlanego tygodnia (daty w naglowkach sa zawsze, takze bez danych).
+let schoolRaw = null;
+let overlayToday = warsawToday();
+let schoolOverlay = buildSchoolOverlay(null, { todayIso: overlayToday, times: TIMES, dayMeta: DAY_META });
 
 // Komunikaty dla uzytkownika wystawia boot-fallback.js (dziala takze wtedy,
 // gdy app.js w ogole sie nie uruchomi).
@@ -187,6 +200,32 @@ async function initSchedule() {
   });
 }
 
+// Nakladka ze sprawdzianami i zmianami planu lezy w osobnym wezle `school`
+// (zapisuje ja tylko narzedzie z hosta, po synchronizacji dziennika).
+async function initSchool() {
+  try {
+    const snapshot = await get(ref(db, 'school'));
+    schoolRaw = snapshot.val();
+    refreshOverlay();
+    renderDesktop();
+    renderMobile();
+    updateStatus();
+  } catch (err) {
+    // Brak wpisu/uprawnien nie moze psuc samego planu - zostaje wersja bez znacznikow.
+    console.warn('Brak danych o sprawdzianach z bazy:', err.message);
+  }
+
+  onValue(ref(db, 'school'), snapshot => {
+    schoolRaw = snapshot.val();
+    refreshOverlay();
+    renderDesktop();
+    renderMobile();
+    updateStatus();
+  }, err => {
+    console.warn('Blad nasluchu sprawdzianow:', err.message);
+  });
+}
+
 // --- Renderowanie ----------------------------------------------------------
 // Klucz przedmiotu do podswietlania i porownan (dane z bazy sa escapowane przy
 // wstawianiu do HTML, takze w atrybutach).
@@ -205,15 +244,188 @@ function getWarsawTime() {
   return { day: new Date(parts.year, parts.month - 1, parts.day, h, parts.minute).getDay(), mins: h * 60 + parts.minute };
 }
 
+// --- Znaczniki sprawdzianow i zmian w planie --------------------------------
+function refreshOverlay() {
+  overlayToday = warsawToday();
+  schoolOverlay = buildSchoolOverlay(schoolRaw, {
+    todayIso: overlayToday,
+    times: TIMES,
+    dayMeta: DAY_META
+  });
+  renderLegend();
+}
+
+function overlaySlot(dayIndex, slotIndex) {
+  return schoolOverlay?.days?.[dayIndex]?.slots?.[slotIndex] || null;
+}
+
+function overlayDay(dayIndex) {
+  return schoolOverlay?.days?.[dayIndex] || null;
+}
+
+// Kolumna odpowiadajaca dzisiejszej dacie; -1 gdy plan pokazuje inny tydzien
+// (np. w piatek po poludniu widac juz nastepny tydzien).
+function currentDayIndex() {
+  const idx = schoolOverlay?.days?.findIndex(d => d.iso && d.iso === overlayToday);
+  return Number.isInteger(idx) ? idx : -1;
+}
+
+function examsPinsHtml(slot, dayIndex, slotIndex) {
+  if (!slot || !slot.exams.length) return '';
+  const first = slot.exams[0];
+  const label = `${first.type || 'Sprawdzian'}: ${first.subject}, ${shortDate(first.date)}`;
+  const extra = slot.exams.length > 1 ? `<span class="ov-count">${slot.exams.length}</span>` : '';
+  return `<button type="button" class="ov-pin ov-exam" data-tip-day="${dayIndex}" data-tip-slot="${slotIndex}" title="${esc(label)}" aria-label="${esc(label)}">${esc(examMarker(first.type))}${extra}</button>`;
+}
+
+function changesPinsHtml(slot, dayIndex, slotIndex) {
+  if (!slot || !slot.changes.length) return '';
+  const first = slot.changes[0];
+  const label = `Zmiana w planie: ${first.subject}, ${shortDate(first.date)} — ${first.opis}`;
+  const extra = slot.changes.length > 1 ? `<span class="ov-count">${slot.changes.length}</span>` : '';
+  return `<button type="button" class="ov-pin ov-change" data-tip-day="${dayIndex}" data-tip-slot="${slotIndex}" title="${esc(label)}" aria-label="${esc(label)}">🔄${extra}</button>`;
+}
+
+// Kafelki na desktopie: male pieczatki w rogu (klik = dymek ze szczegolami).
+function overlayPinsHtml(slot, dayIndex, slotIndex) {
+  const pins = examsPinsHtml(slot, dayIndex, slotIndex) + changesPinsHtml(slot, dayIndex, slotIndex);
+  return pins ? `<div class="ov-pins">${pins}</div>` : '';
+}
+
+// Na telefonie pelnowidthowe paski pod lekcja - latwiejsze do trafienia niz rog kafelka.
+function overlayNotesHtml(slot, dayIndex, slotIndex) {
+  if (!slot) return '';
+  const out = [];
+  if (slot.exams.length) {
+    const first = slot.exams[0];
+    const extra = slot.exams.length > 1 ? ` +${slot.exams.length - 1}` : '';
+    out.push(`<button type="button" class="ov-line ov-exam" data-tip-day="${dayIndex}" data-tip-slot="${slotIndex}" aria-label="${esc(first.type || 'Sprawdzian')}: ${esc(first.subject)}, ${esc(shortDate(first.date))}">
+      <span class="ov-line-ico">${esc(examMarker(first.type))}</span>
+      <span class="ov-line-txt">${esc(first.type || 'Sprawdzian')} · ${esc(shortDate(first.date))}${esc(extra)}</span>
+    </button>`);
+  }
+  if (slot.changes.length) {
+    const first = slot.changes[0];
+    const extra = slot.changes.length > 1 ? ` +${slot.changes.length - 1}` : '';
+    out.push(`<button type="button" class="ov-line ov-change" data-tip-day="${dayIndex}" data-tip-slot="${slotIndex}" aria-label="Zmiana w planie: ${esc(first.subject)}, ${esc(shortDate(first.date))}">
+      <span class="ov-line-ico">🔄</span>
+      <span class="ov-line-txt">Zmiana w planie · ${esc(shortDate(first.date))}${esc(extra)}</span>
+    </button>`);
+  }
+  return out.join('');
+}
+
+function overlayUpdatedLabel() {
+  const ts = schoolOverlay?.updatedAt;
+  if (!ts) return '';
+  try {
+    const when = new Intl.DateTimeFormat('pl-PL', {
+      timeZone: 'Europe/Warsaw', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+    }).format(new Date(ts));
+    return ` · aktualizacja ${when}`;
+  } catch (e) {
+    return '';
+  }
+}
+
+function renderLegend() {
+  const el = document.getElementById('overlayLegend');
+  if (!el) return;
+  if (!schoolRaw) {
+    el.hidden = true;
+    el.innerHTML = '';
+    return;
+  }
+  const count = schoolOverlay?.count || { exams: 0, changes: 0 };
+  const range = schoolOverlay?.from && schoolOverlay?.to
+    ? `${shortDate(schoolOverlay.from)}–${shortDate(schoolOverlay.to)}`
+    : '';
+  let html = '';
+  if (!count.exams && !count.changes) {
+    html = `<span class="ovl-empty">Brak sprawdzianów i zmian w planie${range ? ` (${esc(range)})` : ''}.</span>`;
+  } else {
+    const keys = [];
+    if (count.exams) keys.push('📝 sprawdzian · ✏️ kartkówka');
+    if (count.changes) keys.push('🔄 zmiana w planie');
+    html = `<span class="ovl-keys">${keys.join(' · ')} — dotknij znacznika, aby zobaczyć szczegóły</span>`;
+    if (range) html += `<span class="ovl-range">Z dziennika · ${esc(range)}${esc(overlayUpdatedLabel())}</span>`;
+  }
+  el.innerHTML = html;
+  el.hidden = false;
+}
+
+function openTip(dayIndex, slotIndex) {
+  const slot = overlaySlot(dayIndex, slotIndex);
+  const day = overlayDay(dayIndex);
+  const overlayEl = document.getElementById('tipOverlay');
+  const body = document.getElementById('tipBody');
+  if (!slot || !day || !overlayEl || !body) return;
+
+  const time = TIMES[slotIndex];
+  const lesson = daysData[dayIndex]?.lessons?.[slotIndex];
+  const items = [];
+
+  slot.exams.forEach(exam => {
+    const when = [longDate(exam.date), relativeDay(exam.date, overlayToday)].filter(Boolean).join(' · ');
+    const meta = [
+      `lekcja ${time ? time.num : exam.lesson}`,
+      time ? time.dTime : '',
+      lesson && lesson.room && lesson.room !== '—' ? `sala ${lesson.room}` : ''
+    ].filter(Boolean).join(' · ');
+    items.push(`<div class="tip-item">
+      <div class="tip-head">
+        <span class="tip-ico">${esc(examMarker(exam.type))}</span>
+        <div><div class="tip-title">${esc(exam.type || 'Sprawdzian')}</div><div class="tip-subject">${esc(exam.subject)}</div></div>
+      </div>
+      <div class="tip-meta">${esc(when)}${meta ? ` · ${esc(meta)}` : ''}</div>
+      ${exam.content ? `<div class="tip-material"><span class="tip-label">Materiał:</span><br>${esc(exam.content)}</div>` : ''}
+      ${exam.teacher ? `<div class="tip-extra">Nauczyciel: ${esc(exam.teacher)}</div>` : ''}
+    </div>`);
+  });
+
+  slot.changes.forEach(change => {
+    const when = [longDate(change.date), relativeDay(change.date, overlayToday)].filter(Boolean).join(' · ');
+    const meta = [
+      `lekcja ${time ? time.num : change.lesson}`,
+      time ? time.dTime : '',
+      lesson && lesson.room && lesson.room !== '—' ? `sala ${lesson.room}` : ''
+    ].filter(Boolean).join(' · ');
+    items.push(`<div class="tip-item">
+      <div class="tip-head">
+        <span class="tip-ico">🔄</span>
+        <div><div class="tip-title">Zmiana w planie</div><div class="tip-subject">${esc(change.subject)}</div></div>
+      </div>
+      <div class="tip-meta">${esc(when)}${meta ? ` · ${esc(meta)}` : ''}</div>
+      <div class="tip-material">${esc(change.opis)}</div>
+      ${change.effect ? `<span class="tip-chip">${esc(change.effect)}</span>` : ''}
+    </div>`);
+  });
+
+  body.innerHTML = items.join('');
+  overlayEl.hidden = false;
+  overlayEl.classList.add('open');
+  const closeBtn = document.getElementById('tipClose');
+  if (closeBtn) closeBtn.focus();
+}
+
+function closeTip() {
+  const overlayEl = document.getElementById('tipOverlay');
+  if (!overlayEl) return;
+  overlayEl.classList.remove('open');
+  overlayEl.hidden = true;
+}
+
 function renderDesktopHead() {
   const thead = document.getElementById('desktopThead');
   if (!thead) return;
   const tr = document.createElement('tr');
   tr.innerHTML = '<th class="timo">Godz.</th>';
-  daysData.forEach(day => {
+  daysData.forEach((day, di) => {
     const range = dayTimeRange(day.lessons, TIMES);
+    const ovDay = overlayDay(di);
     const th = document.createElement('th');
-    th.innerHTML = `<span class="dh-name">${esc(day.name)}</span>${range ? `<span class="dh-time">${esc(range)}</span>` : ''}`;
+    th.innerHTML = `<span class="dh-name">${esc(day.name)}</span>${ovDay?.short ? `<span class="dh-date">${esc(ovDay.short)}</span>` : ''}${range ? `<span class="dh-time">${esc(range)}</span>` : ''}`;
+    if (ovDay?.iso && ovDay.iso === overlayToday) th.classList.add('today');
     tr.appendChild(th);
   });
   thead.innerHTML = '';
@@ -227,14 +439,16 @@ function renderDesktop() {
   TIMES.forEach((slot, li) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td class="nr"><span class="num"><span class="bell">🔔</span><span class="no">${esc(slot.num)}</span><span class="time">${esc(slot.time)}</span></span></td>`;
-    daysData.forEach(day => {
+    daysData.forEach((day, di) => {
       const td = document.createElement('td');
       td.className = `cell ${day.colClass}`;
       const l = day.lessons[li];
       if (!l || l.empty) {
         td.innerHTML = `<div class="tile empty"><span class="txt"><span class="p">&mdash;</span></span></div>`;
+        td.insertAdjacentHTML('beforeend', overlayPinsHtml(overlaySlot(di, li), di, li));
       } else {
         td.innerHTML = `<div class="tile" data-subject="${esc(subjectKey(l))}" role="button" tabindex="0" aria-pressed="false"><span class="ico">${esc(l.icon)}</span><span class="txt"><span class="p">${esc(l.name)}</span><span class="s">${esc(l.room)}</span></span></div>`;
+        td.insertAdjacentHTML('beforeend', overlayPinsHtml(overlaySlot(di, li), di, li));
       }
       tr.appendChild(td);
     });
@@ -245,29 +459,40 @@ function renderDesktop() {
 function renderMobile() {
   const wrap = document.getElementById('mobileSchedule');
   wrap.innerHTML = '';
-  daysData.forEach(day => {
+  daysData.forEach((day, di) => {
     const card = document.createElement('div');
     card.className = `day-card ${day.mobileClass}`;
     card.dataset.day = day.dayNum;
     const range = dayTimeRange(day.lessons, TIMES);
-    card.innerHTML = `<div class="day-header">${esc(day.name)}${range ? `<span class="dh-time">${esc(range)}</span>` : ''}</div>`;
+    const ovDay = overlayDay(di);
+    card.innerHTML = `<div class="day-header">${esc(day.name)}${ovDay?.short ? `<span class="dh-date">${esc(ovDay.short)}</span>` : ''}${range ? `<span class="dh-time">${esc(range)}</span>` : ''}</div>`;
+    if (ovDay?.iso && ovDay.iso === overlayToday) card.querySelector('.day-header')?.classList.add('today');
     const lc = document.createElement('div');
     lc.className = 'lessons-container';
     day.lessons.forEach((l, li) => {
-      if (!l || l.empty) return;
+      const slotOverlay = overlaySlot(di, li);
+      // Pusta lekcja bez znacznikow nie zajmuje miejsca; ze sprawdzianem/zmiana
+      // pokazujemy sam pasek przy numerze lekcji (inaczej informacja by znikla).
+      if ((!l || l.empty) && !slotOverlay) return;
       const t = TIMES[li];
       const row = document.createElement('div');
       row.className = 'lesson-row';
       row.dataset.lessonIndex = li;
-      const info = document.createElement('div');
-      info.className = 'lesson-info';
-      info.dataset.subject = subjectKey(l);
-      info.setAttribute('role', 'button');
-      info.setAttribute('tabindex', '0');
-      info.setAttribute('aria-pressed', 'false');
-      info.innerHTML = `<div class="lesson-content"><span class="lesson-icon">${esc(l.icon)}</span><div class="lesson-name">${esc(l.name)}</div><div class="lesson-room">${esc(l.room)}</div></div>`;
+      const main = document.createElement('div');
+      main.className = 'lesson-main';
+      if (l && !l.empty) {
+        const info = document.createElement('div');
+        info.className = 'lesson-info';
+        info.dataset.subject = subjectKey(l);
+        info.setAttribute('role', 'button');
+        info.setAttribute('tabindex', '0');
+        info.setAttribute('aria-pressed', 'false');
+        info.innerHTML = `<div class="lesson-content"><span class="lesson-icon">${esc(l.icon)}</span><div class="lesson-name">${esc(l.name)}</div><div class="lesson-room">${esc(l.room)}</div></div>`;
+        main.appendChild(info);
+      }
+      main.insertAdjacentHTML('beforeend', overlayNotesHtml(slotOverlay, di, li));
       row.innerHTML = `<div class="lesson-time"><span class="bell">🔔</span><span class="no">${esc(t.num)}</span><span class="time">${esc(t.dTime)}</span></div>`;
-      row.appendChild(info);
+      row.appendChild(main);
       lc.appendChild(row);
     });
     card.appendChild(lc);
@@ -277,11 +502,15 @@ function renderMobile() {
 }
 
 function renderTabs() {
-  const { day, mins } = getWarsawTime();
-  const today = daysData.find(d => d.dayNum === day);
-  const activeLessons = today ? today.lessons.map((l, i) => ({ l, i })).filter(x => x.l && !x.l.empty) : [];
-  const lastEnd = activeLessons.length ? TIMES[activeLessons[activeLessons.length - 1].i].e : 840;
-  let init = (day < 1 || day > 5) ? 1 : (mins > lastEnd ? (day < 5 ? day + 1 : 1) : day);
+  const { mins } = getWarsawTime();
+  const idx = currentDayIndex();
+  let init = 1;
+  if (idx >= 0) {
+    const today = daysData[idx];
+    const activeLessons = today ? today.lessons.map((l, i) => ({ l, i })).filter(x => x.l && !x.l.empty) : [];
+    const lastEnd = activeLessons.length ? TIMES[activeLessons[activeLessons.length - 1].i].e : 840;
+    init = mins > lastEnd ? (idx < daysData.length - 1 ? idx + 2 : 1) : idx + 1;
+  }
   const tc = document.getElementById('mobileTabs');
   tc.innerHTML = '';
   daysData.forEach(d => {
@@ -321,19 +550,31 @@ function markLesson(slotIndex, day, cssClass, badgeText) {
 }
 
 function updateStatus() {
+  // Po polnocy zmienia sie tydzien i znaczniki - odswiezamy je bez przeladowania strony.
+  if (warsawToday() !== overlayToday) {
+    refreshOverlay();
+    renderDesktop();
+    renderMobile();
+  }
   document.querySelectorAll('.active-lesson, .next-lesson').forEach(e => {
     e.classList.remove('active-lesson', 'next-lesson');
     e.removeAttribute('data-badge');
   });
 
-  const { day, mins } = getWarsawTime();
+  const { mins } = getWarsawTime();
+  const dayIdx = currentDayIndex();
 
-  if (day < 1 || day > 5) {
+  // Wyswietlany tydzien nie zawiera dzisiejszej daty (np. piatek -> przyszly
+  // tydzien) - nie oznaczamy wtedy zadnej lekcji jako TERAZ/nastepna.
+  if (dayIdx < 0) {
     applyHighlight();
     return;
   }
-  const today = daysData.find(d => d.dayNum === day);
-  if (!today) return;
+  const today = daysData[dayIdx];
+  if (!today) {
+    applyHighlight();
+    return;
+  }
 
   if (mins < TIMES[0].s || mins > TIMES[TIMES.length - 1].e) {
     applyHighlight();
@@ -347,9 +588,9 @@ function updateStatus() {
   }
 
   if (li !== -1) {
-    markLesson(li, day, 'active-lesson', activeBadge(TIMES[li].e - mins));
+    markLesson(li, dayIdx + 1, 'active-lesson', activeBadge(TIMES[li].e - mins));
   } else if (isBreak && ni !== -1) {
-    markLesson(ni, day, 'next-lesson', nextBadge(TIMES[ni].s - mins));
+    markLesson(ni, dayIdx + 1, 'next-lesson', nextBadge(TIMES[ni].s - mins));
   }
   applyHighlight();
 }
@@ -425,18 +666,37 @@ async function refreshAdminState(user) {
 
 // --- Zdarzenia -------------------------------------------------------------
 function setupEvents() {
-  // Podswietlanie przedmiotow: mysz/dotyk oraz klawiatura (Enter/Spacja)
+  // Podswietlanie przedmiotow: mysz/dotyk oraz klawiatura (Enter/Spacja).
+  // Znaczniki sprawdzianow/zmian maja pierwszenstwo - otwieraja dymek.
   document.addEventListener('click', e => {
+    const pin = e.target.closest('[data-tip-day]');
+    if (pin) {
+      e.preventDefault();
+      openTip(Number(pin.dataset.tipDay), Number(pin.dataset.tipSlot));
+      return;
+    }
     const t = e.target.closest('.tile,.lesson-info');
     if (t) toggleSubjectHighlight(t);
   });
   document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeTip();
+      return;
+    }
     if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (e.target?.closest?.('[data-tip-day]')) return;
     const t = e.target && e.target.closest ? e.target.closest('.tile,.lesson-info') : null;
     if (!t) return;
     e.preventDefault();
     toggleSubjectHighlight(t);
   });
+
+  // Dymek ze szczegolami sprawdzianu/zmiany (wspolny dla desktopu i telefonu)
+  const tipOverlay = document.getElementById('tipOverlay');
+  if (tipOverlay) {
+    document.getElementById('tipClose')?.addEventListener('click', closeTip);
+    tipOverlay.addEventListener('click', e => { if (e.target === tipOverlay) closeTip(); });
+  }
 
   // Przełączanie motywu
   const themeBtn = document.getElementById('themeToggle');
@@ -659,6 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof window.planReady === 'function') window.planReady();
   setupEvents();
   initSchedule();
+  initSchool();
   onAuthStateChanged(auth, refreshAdminState);
   setInterval(updateStatus, 10000);
 });

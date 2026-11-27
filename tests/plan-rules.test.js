@@ -38,6 +38,11 @@ test('lista administratorow nie jest publicznie czytelna', () => {
   assert.equal(admins.$uid['.read'], 'auth != null && auth.uid === $uid');
 });
 
+test('sprawdziany i zmiany planu sa publicznie czytelne, ale zapis tylko z hosta', () => {
+  assert.equal(rules.school['.read'], true);
+  assert.equal(rules.school['.write'], false);
+});
+
 test('zaden node nie ma otwartego zapisu (.write: true)', () => {
   const walk = (node, path) => {
     for (const [key, value] of Object.entries(node)) {
