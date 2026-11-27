@@ -55,6 +55,15 @@ jobs:
       # wyprzedzac rzeczywistej publikacji.
       - name: Znacznik wersji (version.json)
         run: node tools/write-version.mjs
+      # action-hosting-deploy powyzej opublikowal calosc BEZ version.json (plik
+      # powstal po kroku). Firebase deploy robi upload tylko zmienionych plikow,
+      # wiec ten krok wysyla wylacznie version.json na hosting.
+      - name: Publikacja version.json na hosting
+        if: env.FIREBASE_SA != ''
+        run: |
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          firebase deploy --only hosting:plan5a --project plan-e5ce7 --non-interactive
 
       - name: Wdrozenie regul Realtime Database
         if: env.FIREBASE_SA != ''

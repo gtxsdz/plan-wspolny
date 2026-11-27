@@ -925,7 +925,13 @@ function setupEvents() {
   let editCloseTimer = null;
 
   const closeEdit = () => {
-    editCloseTimer = null;
+    // Anuluj oczekujacy callback, zanim wyczyscimy uchwyt: inaczej reczne
+    // zamkniecie nie znosilo zaplanowanego domkniecia i drugi edytor mogl
+    // zostac zamkniety w 1,2 s.
+    if (editCloseTimer) {
+      clearTimeout(editCloseTimer);
+      editCloseTimer = null;
+    }
     editOverlay.classList.remove('open');
   };
   const scheduleCloseEdit = () => {

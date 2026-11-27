@@ -112,7 +112,7 @@ test('version.json jest publikowany bez cache (wykrywanie starej kopii)', () => 
   }
 });
 
-test('wdrozenie zapisuje version.json po publikacji hostingu', () => {
+test('wdrozenie zapisuje i publikuje version.json po publikacji hostingu', () => {
   for (const target of ['plan5a', 'plan4ta']) {
     const workflow = read(`.github/workflows/deploy-${target}.yml`);
     const versionAt = workflow.indexOf('tools/write-version.mjs');
@@ -120,9 +120,13 @@ test('wdrozenie zapisuje version.json po publikacji hostingu', () => {
     assert.ok(versionAt > -1, `workflow ${target}: brak kroku tools/write-version.mjs`);
     assert.ok(deployAt > -1, `workflow ${target}: brak kroku publikacji hostingu`);
     // Hosting serwuje nowe pliki dopiero po swoim kroku - znacznik czasu musi
-    // powstac PO publikacji, inaczej karta ładująca między krokami nigdy nie
-    // wykryje wdrożenia (built > czas wczytania strony).
+    // powstac PO publikacji (inaczej karta ladujaca miedzy krokami nigdy nie
+    // wykryje wdrozenia), a nastepnie MUSI zostac wyslany na hosting osobnym
+    // krokiem firebase deploy (sam zapis pliku tego nie robi).
     assert.ok(versionAt > deployAt, `workflow ${target}: version.json musi powstac po publikacji`);
+    const vPublishAt = workflow.indexOf('name: Publikacja version.json na hosting');
+    assert.ok(vPublishAt > -1, `workflow ${target}: brak kroku publikacji version.json`);
+    assert.ok(vPublishAt > versionAt, `workflow ${target}: publikacja version.json musi byc po jego zapisie`);
   }
   assert.ok(existsSync(path.join(ROOT, 'tools/write-version.mjs')), 'brak tools/write-version.mjs');
 });
