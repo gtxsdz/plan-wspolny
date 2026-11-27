@@ -922,8 +922,16 @@ function setupEvents() {
   const editOverlay = document.getElementById('editOverlay');
   const saveStatus = document.getElementById('saveStatus');
   const btnSave = document.getElementById('btnSave');
+  let editCloseTimer = null;
 
-  const closeEdit = () => editOverlay.classList.remove('open');
+  const closeEdit = () => {
+    editCloseTimer = null;
+    editOverlay.classList.remove('open');
+  };
+  const scheduleCloseEdit = () => {
+    if (editCloseTimer) clearTimeout(editCloseTimer);
+    editCloseTimer = setTimeout(closeEdit, 1200);
+  };
   document.getElementById('editClose').addEventListener('click', closeEdit);
   document.getElementById('btnCancel').addEventListener('click', closeEdit);
   editOverlay.addEventListener('click', e => { if (e.target === editOverlay) closeEdit(); });
@@ -941,6 +949,9 @@ function setupEvents() {
     // Trwajacy zapis nie pozwala otworzyc formularza od nowa: po zakonczeniu
     // stara sesja zamyka wciaz otwarty modal i nadpisuje wspolny stan.
     if (saveInFlight) return;
+    // Nowa sesja edycji: nie pozwalamy staremu timeoutowi zamykania domknac
+    // swiezo otwartego formularza.
+    if (editCloseTimer) clearTimeout(editCloseTimer);
     buildEditForm();
     // Punkt odniesienia: co formularz pokazywal w chwili otwarcia.
     editBaseline = collectForm();
@@ -962,7 +973,7 @@ function setupEvents() {
       saveStatus.className = 'save-status ok';
       saveStatus.textContent = 'Bez zmian — nic nie zapisano.';
       saveStatus.style.display = 'flex';
-      setTimeout(closeEdit, 1200);
+      scheduleCloseEdit();
       return;
     }
     // Dni, ktore ktos inny zmienil w bazie, gdy edytor byl otwarty.
@@ -983,7 +994,7 @@ function setupEvents() {
         ? `✅ Zapisano. Uwaga: ${conflicts.map(dayNameLower).join(', ')} zmienił się w czasie edycji — w bazie jest teraz Twoja wersja.`
         : '✅ Zapisano!';
       saveStatus.style.display = 'flex';
-      setTimeout(closeEdit, 1200);
+      scheduleCloseEdit();
     } catch (err) {
       console.warn('Błąd zapisu planu:', err.code || err.message);
       saveStatus.className = 'save-status err';

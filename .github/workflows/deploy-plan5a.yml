@@ -37,12 +37,6 @@ jobs:
           npm run check
           npm test
 
-      # version.json z wykrywaniem starej kopii w przegladarce (lib/update-check.js)
-      # musi powstac przed publikacja hostingu - inaczej telefon nie wie, ze jest
-      # nowsza wersja, i dalej pokazuje to, co ma w pamieci.
-      - name: Znacznik wersji (version.json)
-        run: node tools/write-version.mjs
-
       # Kolejnosc ma znaczenie: najpierw publikujemy aplikacje, a dopiero potem
       # reguly bazy. Ewentualny blad wdrozenia regul (np. brak uprawnien IAM
       # konta serwisowego) nie blokuje wtedy publikacji nowej wersji serwisu.
@@ -54,6 +48,13 @@ jobs:
           channelId: live
           projectId: plan-e5ce7
           target: plan5a
+
+      # version.json z wykrywaniem starej kopii w przegladarce (lib/update-check.js)
+      # musi powstac PO publikacji hostingu: hosting serwuje nowe pliki
+      # dopiero po swoim kroku, wiec znacznik z czasem wdrozenia nie moze
+      # wyprzedzac rzeczywistej publikacji.
+      - name: Znacznik wersji (version.json)
+        run: node tools/write-version.mjs
 
       - name: Wdrozenie regul Realtime Database
         if: env.FIREBASE_SA != ''
