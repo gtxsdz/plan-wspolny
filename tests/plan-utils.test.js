@@ -24,7 +24,7 @@ import {
   shortDate,
   longDate,
   relativeDay,
-  displayWeekMonday,
+  nextDateForWeekday,
   examMarker,
   buildSchoolOverlay,
   LIMITS,
@@ -250,25 +250,17 @@ test('daty ISO: przesuniecia, dzien tygodnia i formaty', () => {
   assert.equal(relativeDay('', '2026-11-27'), '');
 });
 
-test('wyswietlany tydzien: biezacy od poniedzialku, w piatek nastepny po lekcjach', () => {
-  assert.equal(displayWeekMonday('2026-11-23'), '2026-11-23', 'poniedzialek');
-  assert.equal(displayWeekMonday('2026-11-26'), '2026-11-23', 'czwartek');
-  assert.equal(displayWeekMonday('2026-11-27'), '2026-11-30', 'piatek bez zegara = po lekcjach');
-  assert.equal(displayWeekMonday('2026-11-28'), '2026-11-30', 'sobota');
-  assert.equal(displayWeekMonday('2026-11-29'), '2026-11-30', 'niedziela');
-  assert.equal(displayWeekMonday(''), '');
-
-  // W piatek rano (przed koncem lekcji) zostaje biezacy tydzien.
-  assert.equal(
-    displayWeekMonday('2026-11-27', { nowMins: 600, dayEndMins: 635 }),
-    '2026-11-23',
-    'piatek w trakcie lekcji'
-  );
-  assert.equal(
-    displayWeekMonday('2026-11-27', { nowMins: 636, dayEndMins: 635 }),
-    '2026-11-30',
-    'piatek po ostatniej lekcji'
-  );
+test('najblizsza data dla dnia tygodnia (kolumny przechodza na nastepny tydzien)', () => {
+  assert.equal(nextDateForWeekday('2026-11-27', 5), '2026-11-27', 'dzisiejszy piatek zostaje');
+  assert.equal(nextDateForWeekday('2026-11-27', 1), '2026-11-30', 'poniedzialek juz minal');
+  assert.equal(nextDateForWeekday('2026-11-27', 4), '2026-12-03', 'czwartek juz minal');
+  assert.equal(nextDateForWeekday('2026-11-28', 1), '2026-11-30', 'sobota -> poniedzialek');
+  assert.equal(nextDateForWeekday('2026-11-29', 4), '2026-12-03', 'niedziela');
+  assert.equal(nextDateForWeekday('2026-12-02', 3), '2026-12-02', 'sroda w trakcie dnia');
+  assert.equal(nextDateForWeekday('2026-12-02', 1), '2026-12-07', 'poniedzialek nastepnego tygodnia');
+  assert.equal(nextDateForWeekday('', 1), '');
+  assert.equal(nextDateForWeekday('2026-12-02', 0), '');
+  assert.equal(nextDateForWeekday('2026-12-02', 8), '');
 });
 
 test('buildSchoolOverlay: w piatek rano zostaje dzisiejszy dzien', () => {
@@ -287,18 +279,19 @@ test('buildSchoolOverlay: w piatek rano zostaje dzisiejszy dzien', () => {
   const morning = buildSchoolOverlay(raw, {
     todayIso: '2026-11-27', nowMins: 540, dayEndMins: 635, times: TIMES, dayMeta: DAYS
   });
-  assert.equal(morning.monday, '2026-11-23');
+  assert.equal(morning.monday, '2026-11-30');
   assert.equal(morning.from, '2026-11-27');
-  assert.equal(morning.count.exams, 1, 'zostaje tylko sprawdzian z lekcji, ktora sie nie skonczyla');
+  assert.equal(morning.count.exams, 2, 'dzisiejsza lekcja 3 + poniedziałek następnego tygodnia');
   assert.equal(morning.days[4].slots[2].exams[0].id, 'b');
   assert.equal(morning.days[4].slots[0], null, 'kartkówka z 8:45 już się odbyła');
+  assert.equal(morning.days[0].slots[0].exams[0].id, 'c');
 
   // Po ostatniej lekcji (10:36) plan przechodzi na następny tydzień.
   const after = buildSchoolOverlay(raw, {
     todayIso: '2026-11-27', nowMins: 636, dayEndMins: 635, times: TIMES, dayMeta: DAYS
   });
   assert.equal(after.monday, '2026-11-30');
-  assert.equal(after.from, '2026-11-28');
+  assert.equal(after.from, '2026-11-30');
   assert.equal(after.count.exams, 1);
   assert.equal(after.days[0].slots[0].exams[0].id, 'c');
 });
@@ -350,11 +343,11 @@ test('buildSchoolOverlay: tylko od jutra, przypisanie do dnia i lekcji', () => {
   ];
   const overlay = buildSchoolOverlay(raw, { todayIso: '2026-12-02', times: TIMES, dayMeta: DAYS });
 
-  assert.equal(overlay.monday, '2026-11-30');
+  assert.equal(overlay.monday, '2026-12-07');
   assert.equal(overlay.from, '2026-12-03');
-  assert.equal(overlay.to, '2026-12-04');
-  assert.deepEqual(overlay.days.map((d) => d.short), ['30.11', '1.12', '2.12', '3.12', '4.12']);
-  assert.equal(overlay.count.exams, 1, 'sprawdzian z 1.12 (przeszlosc) i spoza tygodnia odsiane');
+  assert.equal(overlay.to, '2026-12-09');
+  assert.deepEqual(overlay.days.map((d) => d.short), ['7.12', '8.12', '9.12', '3.12', '4.12']);
+  assert.equal(overlay.count.exams, 2, 'przeszlosc i weekend odsiane, przyszly poniedzialek wliczony');
   assert.equal(overlay.count.changes, 1);
 
   const wed = overlay.days[2];
@@ -364,6 +357,7 @@ test('buildSchoolOverlay: tylko od jutra, przypisanie do dnia i lekcji', () => {
   assert.equal(thu.slots[1].exams[0].subject, 'Fizyka');
   assert.equal(thu.slots[1].exams[0].content, 'FALE');
   assert.equal(thu.slots[2].changes[0].opis, 'zastępstwo: A → B');
+  assert.equal(overlay.days[0].slots[0].exams[0].subject, 'Biologia', 'poniedzialek nastepnego tygodnia');
   assert.equal(overlay.updatedAt, 1764500000000);
 });
 
@@ -382,7 +376,7 @@ test('buildSchoolOverlay: w piatek pokazuje przyszly tydzien i czyści przeszlos
   const overlay = buildSchoolOverlay(raw, { todayIso: '2026-11-27', times: TIMES, dayMeta: DAYS });
 
   assert.equal(overlay.monday, '2026-11-30');
-  assert.equal(overlay.from, '2026-11-28');
+  assert.equal(overlay.from, '2026-11-30');
   assert.equal(overlay.count.exams, 2);
   assert.equal(overlay.days[0].slots[0].exams[0].date, '2026-11-30');
   assert.equal(overlay.days[4].slots[2].exams[0].subject, 'WF');

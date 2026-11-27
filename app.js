@@ -274,7 +274,10 @@ function nextOverlayRefreshAt(nowMins, dayEndMins) {
     });
   }
   const { day } = getWarsawTime();
-  if (day === 5 && nowMins <= dayEndMins) next = Math.min(next, dayEndMins + 1);
+  // Po ostatniej lekcji dzisiejsza kolumna przechodzi na nastepny tydzien.
+  if (day >= 1 && day <= daysData.length && nowMins <= dayEndMins) {
+    next = Math.min(next, dayEndMins + 1);
+  }
   return next;
 }
 
@@ -463,8 +466,11 @@ function renderDesktopHead() {
   daysData.forEach((day, di) => {
     const range = dayTimeRange(day.lessons, TIMES);
     const ovDay = overlayDay(di);
+    const dateLabel = ovDay?.short
+      ? (ovDay.iso === overlayToday ? `${ovDay.short} · dziś` : ovDay.short)
+      : '';
     const th = document.createElement('th');
-    th.innerHTML = `<span class="dh-name">${esc(day.name)}</span>${ovDay?.short ? `<span class="dh-date">${esc(ovDay.short)}</span>` : ''}${range ? `<span class="dh-time">${esc(range)}</span>` : ''}`;
+    th.innerHTML = `<span class="dh-name">${esc(day.name)}</span>${dateLabel ? `<span class="dh-date">${esc(dateLabel)}</span>` : ''}${range ? `<span class="dh-time">${esc(range)}</span>` : ''}`;
     if (ovDay?.iso && ovDay.iso === overlayToday) th.classList.add('today');
     tr.appendChild(th);
   });
@@ -505,7 +511,10 @@ function renderMobile() {
     card.dataset.day = day.dayNum;
     const range = dayTimeRange(day.lessons, TIMES);
     const ovDay = overlayDay(di);
-    card.innerHTML = `<div class="day-header">${esc(day.name)}${ovDay?.short ? `<span class="dh-date">${esc(ovDay.short)}</span>` : ''}${range ? `<span class="dh-time">${esc(range)}</span>` : ''}</div>`;
+    const dateLabel = ovDay?.short
+      ? (ovDay.iso === overlayToday ? `${ovDay.short} · dziś` : ovDay.short)
+      : '';
+    card.innerHTML = `<div class="day-header">${esc(day.name)}${dateLabel ? `<span class="dh-date">${esc(dateLabel)}</span>` : ''}${range ? `<span class="dh-time">${esc(range)}</span>` : ''}</div>`;
     if (ovDay?.iso && ovDay.iso === overlayToday) card.querySelector('.day-header')?.classList.add('today');
     const lc = document.createElement('div');
     lc.className = 'lessons-container';
@@ -541,6 +550,22 @@ function renderMobile() {
   renderTabs();
 }
 
+// Gdy dzisiejsza kolumna juz przeszla na nastepny tydzien, pierwsza zakladka
+// powinna byc najblizszy dzien szkolny (np. w czwartek po lekcjach - piatek),
+// a nie zawsze poniedzialek.
+function nextSchoolDayIndex() {
+  let best = -1;
+  let bestIso = '';
+  (schoolOverlay?.days || []).forEach((day, i) => {
+    if (!day.iso || day.iso <= overlayToday) return;
+    if (!bestIso || day.iso < bestIso) {
+      bestIso = day.iso;
+      best = i;
+    }
+  });
+  return best;
+}
+
 function renderTabs() {
   const { mins } = getWarsawTime();
   const idx = currentDayIndex();
@@ -550,6 +575,9 @@ function renderTabs() {
     const activeLessons = today ? today.lessons.map((l, i) => ({ l, i })).filter(x => x.l && !x.l.empty) : [];
     const lastEnd = activeLessons.length ? TIMES[activeLessons[activeLessons.length - 1].i].e : 840;
     init = mins > lastEnd ? (idx < daysData.length - 1 ? idx + 2 : 1) : idx + 1;
+  } else {
+    const nextIdx = nextSchoolDayIndex();
+    if (nextIdx >= 0) init = nextIdx + 1;
   }
   const tc = document.getElementById('mobileTabs');
   tc.innerHTML = '';
