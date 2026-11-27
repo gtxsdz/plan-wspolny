@@ -61,6 +61,7 @@ jobs:
       - name: Publikacja version.json na hosting
         if: env.FIREBASE_SA != ''
         run: |
+          npm install -g firebase-tools
           printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           firebase deploy --only hosting:plan4ta --project plan4ta --non-interactive
