@@ -13,6 +13,10 @@ import {
   normalizeLesson,
   mergeDays,
   hasAnyLesson,
+  daySignature,
+  changedDays,
+  conflictDays,
+  mobileSlotIndexes,
   dayTimeRange,
   subjectOptionsFor,
   activeBadge,
@@ -425,4 +429,45 @@ test('buildSchoolOverlay bez danych nadal zwraca daty tygodnia', () => {
   assert.deepEqual(overlay.days.map((d) => d.iso), ['2026-11-30', '2026-12-01']);
   assert.deepEqual(overlay.count, { exams: 0, changes: 0 });
   assert.equal(overlay.updatedAt, 0);
+});
+
+// --- Zapis tylko zmienionych dni (dwóch administratorów naraz) --------------------
+
+const day = (...lessons) => ({ lessons });
+
+test('daySignature: pusta lekcja i brak lekcji to ten sam odcisk', () => {
+  assert.equal(daySignature(day({ empty: true })), daySignature(day(null)));
+  assert.equal(daySignature(day({ name: 'Matematyka', room: '12' })), daySignature(day({ name: 'Matematyka', room: '12', icon: '🔬' })));
+  assert.notEqual(daySignature(day({ name: 'Matematyka', room: '12' })), daySignature(day({ name: 'Matematyka', room: '13' })));
+  assert.equal(daySignature(undefined), daySignature(null));
+});
+
+test('changedDays: zwraca tylko dni zmienione w edytorze', () => {
+  const baseline = [day({ name: 'Polski', room: '1' }), day(null), day({ name: 'WF', room: 'sala' })];
+  const next = [day({ name: 'Polski', room: '1' }), day({ name: 'WF', room: 'sala' }), day({ name: 'WF', room: 'sala' })];
+  assert.deepEqual(changedDays(baseline, next), [1]);
+  assert.deepEqual(changedDays(baseline, baseline), []);
+  assert.deepEqual(changedDays([], []), []);
+  assert.deepEqual(changedDays(null, null), []);
+});
+
+test('conflictDays: ostrzega, gdy ktos inny zmienil ten sam dzien', () => {
+  const baseline = [day({ name: 'Polski', room: '1' }), day({ name: 'WF', room: 'sala' })];
+  const current = [day({ name: 'Polski', room: '1' }), day({ name: 'WF', room: 'boisko' })];
+  const next = [day({ name: 'Matematyka', room: '2' }), day({ name: 'WF', room: 'sala' })];
+  // zmieniony tylko dzien 0 - cudza zmiana w dniu 1 nie jest konfliktem
+  assert.deepEqual(conflictDays(baseline, current, [0]), []);
+  // zmieniony dzien 1, ktory w bazie tez sie zmienil
+  assert.deepEqual(conflictDays(baseline, current, [1]), [1]);
+  assert.deepEqual(conflictDays(baseline, current, []), []);
+  assert.deepEqual(conflictDays(baseline, null, [0, 1]), []);
+});
+
+test('mobileSlotIndexes: pusta lekcja tylko wtedy, gdy ma znacznik z dziennika', () => {
+  const d = day({ name: 'Polski', room: '1' }, null, { empty: true }, { name: 'WF', room: 'sala' });
+  assert.deepEqual(mobileSlotIndexes(d, null), [0, 3]);
+  const ovDay = { slots: [null, { exams: [{ subject: 'Biologia' }], changes: [] }, { exams: [], changes: [{ subject: 'WF' }] }, null] };
+  assert.deepEqual(mobileSlotIndexes(d, ovDay), [0, 1, 2, 3], 'puste sloty ze znacznikiem sa widoczne');
+  assert.deepEqual(mobileSlotIndexes(day(), { slots: [] }), []);
+  assert.deepEqual(mobileSlotIndexes(null, null), []);
 });

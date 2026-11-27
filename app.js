@@ -32,6 +32,9 @@ import {
   mergeDays,
   hasAnyLesson,
   dayTimeRange,
+  changedDays,
+  conflictDays,
+  mobileSlotIndexes,
   subjectOptionsFor,
   activeBadge,
   nextBadge,
@@ -67,12 +70,20 @@ const DAY_META = [
   { dayNum: 5, mobileClass: 'day-pt',  colClass: 'col-pt',  name: 'Piątek',      shortName: 'Pt'  }
 ];
 
+// Nazwa dnia w srodku zdania ("wtorek zmienił się w czasie edycji").
+function dayNameLower(index) {
+  const name = DAY_META[index]?.name;
+  return name ? name.toLowerCase() : `dzień ${index + 1}`;
+}
+
 // Klucze localStorage osobne per klasa (5a i 4Ta nie nadpisuja sobie cache)
 const CACHE_KEY = `plan_${CLASS_ID}_offline`;
 const THEME_KEY = 'schedule_theme';
 
 let daysData = mergeDays(DAY_META, DEFAULT_LESSONS, null, TIMES, SUBJECT_MAP).days;
 let isAdmin = false;
+// Stan formularza w chwili otwarcia edytora - do zapisu tylko zmienionych dni.
+let editBaseline = null;
 let activeSubject = null;
 let noticeSource = null;
 
@@ -246,12 +257,38 @@ function readCache() {
   }
 }
 
+// Motyw w localStorage: przegladarka moze zablokowac trwaly magazyn
+// (SecurityError w trybie prywatnym / po zablokowaniu danych witryny).
+// Wtedy motyw dziala tylko do odswiezenia, ale strona musi sie narysowac.
+function readTheme() {
+  try {
+    return localStorage.getItem(THEME_KEY);
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeTheme(value) {
+  try {
+    localStorage.setItem(THEME_KEY, value);
+  } catch (e) {
+    // brak dostepu do magazynu - motyw zostaje tylko w tej sesji
+  }
+}
+
 function applyDays(fbDays, options = {}) {
   const { days, warnings } = mergeDays(DAY_META, DEFAULT_LESSONS, fbDays, TIMES, SUBJECT_MAP);
   daysData = days;
   warnings.forEach(w => console.warn('[plan] ' + w));
   // Plan wbudowany w aplikacje nie trafia do cache - cache ma trzymac dane z bazy.
   if (options.saveCache !== false) cacheSchedule(days);
+  refreshViews();
+}
+
+// Nakladka (daty w naglowkach, znaczniki, godzina konca dnia) zalezy od lekcji
+// w planie, wiec musi byc przeliczana razem z nim - takze po zapisie z edytora.
+function refreshViews() {
+  refreshOverlay();
   renderDesktop();
   renderMobile();
   updateStatus();
@@ -285,9 +322,10 @@ async function initSchedule() {
   } catch (err) {
     console.warn('Błąd pobierania z Firebase:', err.message);
     showCachedPlan('Brak połączenia z bazą planu.');
-    return;
   }
 
+  // Nasluch rejestrujemy takze po nieudanym pierwszym odczycie: karta otwarta
+  // w czasie awarii sama wroci do aktualnego planu, gdy siec wroci.
   onValue(ref(db, 'schedule/days'), snapshot => {
     clearNotice('data');
     applyDays(snapshot.val());
@@ -547,23 +585,32 @@ function renderMobile() {
     if (ovDay?.iso && ovDay.iso === overlayToday) card.querySelector('.day-header')?.classList.add('today');
     const lc = document.createElement('div');
     lc.className = 'lessons-container';
-    day.lessons.forEach((l, li) => {
-      if (!l || l.empty) return;
+    mobileSlotIndexes(day, ovDay).forEach((li) => {
+      const l = day.lessons[li];
       const t = TIMES[li];
       const slotOverlay = overlaySlot(di, li);
+      const isEmpty = !l || l.empty;
       const row = document.createElement('div');
       row.className = 'lesson-row';
       row.dataset.lessonIndex = li;
-      const info = document.createElement('div');
-      info.className = 'lesson-info';
-      info.dataset.subject = subjectKey(l);
-      info.setAttribute('role', 'button');
-      info.setAttribute('tabindex', '0');
-      info.setAttribute('aria-pressed', 'false');
-      info.innerHTML = `<div class="lesson-content"><span class="lesson-icon">${esc(l.icon)}</span><div class="lesson-name">${esc(l.name)}</div><div class="lesson-room">${esc(l.room)}</div></div>`;
       const main = document.createElement('div');
       main.className = 'lesson-main';
-      main.appendChild(info);
+      if (isEmpty) {
+        row.classList.add('lesson-row-empty');
+        const info = document.createElement('div');
+        info.className = 'lesson-info empty';
+        info.innerHTML = `<div class="lesson-content"><span class="lesson-icon">${esc(EMPTY_ICON)}</span><div class="lesson-name">—</div><div class="lesson-room"></div></div>`;
+        main.appendChild(info);
+      } else {
+        const info = document.createElement('div');
+        info.className = 'lesson-info';
+        info.dataset.subject = subjectKey(l);
+        info.setAttribute('role', 'button');
+        info.setAttribute('tabindex', '0');
+        info.setAttribute('aria-pressed', 'false');
+        info.innerHTML = `<div class="lesson-content"><span class="lesson-icon">${esc(l.icon)}</span><div class="lesson-name">${esc(l.name)}</div><div class="lesson-room">${esc(l.room)}</div></div>`;
+        main.appendChild(info);
+      }
       main.insertAdjacentHTML('beforeend', overlayPinsHtml(slotOverlay, di, li));
       row.innerHTML = `<div class="lesson-time"><span class="bell">🔔</span><span class="no">${esc(t.num)}</span><span class="time">${esc(t.dTime)}</span></div>`;
       row.appendChild(main);
@@ -635,7 +682,9 @@ function markLesson(slotIndex, day, cssClass, badgeText) {
   const mc = document.querySelector(`.day-card[data-day="${day}"]`);
   if (mc) {
     const inf = mc.querySelector(`.lesson-row[data-lesson-index="${slotIndex}"] .lesson-info`);
-    if (inf) {
+    // Pusty slot ze znacznikiem z dziennika nie jest lekcja - nie dostaje
+    // odznaki TERAZ/nastepna.
+    if (inf && !inf.classList.contains('empty')) {
       inf.classList.add(cssClass);
       inf.setAttribute('data-badge', badgeText);
     }
@@ -713,16 +762,19 @@ function toggleSubjectHighlight(el) {
 }
 
 // --- Zapis i tozsamosc administratora --------------------------------------
-async function saveData(data) {
+// Zapisujemy tylko dni faktycznie zmienione w edytorze: wyslanie wszystkich
+// pieciu dni cofnelo by zmiany, ktore w miedzyczasie zrobil drugi administrator.
+async function saveData(data, dayIndexes) {
   const user = auth.currentUser;
   if (!user) {
     throw Object.assign(new Error('Brak zalogowanego administratora'), { code: 'NOT_AUTHENTICATED' });
   }
+  if (!Array.isArray(dayIndexes) || !dayIndexes.length) return;
   // Zapis per dzien (zamiast nadpisywania calego drzewa) + metadane zmiany,
   // zeby dalo sie wykryc, kto i kiedy zapisal plan.
   const updates = { updatedAt: Date.now(), updatedBy: user.uid };
-  data.forEach((day, i) => {
-    updates[`days/${i}`] = { lessons: day.lessons.map(l => normalizeLesson(l, SUBJECT_MAP)) };
+  dayIndexes.forEach((i) => {
+    updates[`days/${i}`] = { lessons: data[i].lessons.map(l => normalizeLesson(l, SUBJECT_MAP)) };
   });
   await update(ref(db, 'schedule'), updates);
 }
@@ -794,7 +846,7 @@ function setupEvents() {
 
   // Przełączanie motywu
   const themeBtn = document.getElementById('themeToggle');
-  if (localStorage.getItem(THEME_KEY) === 'dark') {
+  if (readTheme() === 'dark') {
     document.body.classList.add('dark-mode');
     themeBtn.textContent = '☀️ Tryb jasny';
   }
@@ -802,7 +854,7 @@ function setupEvents() {
     document.body.classList.toggle('dark-mode');
     const isDark = document.body.classList.contains('dark-mode');
     themeBtn.textContent = isDark ? '☀️ Tryb jasny' : '🌙 Tryb ciemny';
-    localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+    writeTheme(isDark ? 'dark' : 'light');
   });
 
   // Logowanie administratora (Firebase Authentication: e-mail + haslo)
@@ -875,6 +927,8 @@ function setupEvents() {
   document.getElementById('editBtn').addEventListener('click', () => {
     if (!isAdmin) return;
     buildEditForm();
+    // Punkt odniesienia: co formularz pokazywal w chwili otwarcia.
+    editBaseline = collectForm();
     saveStatus.className = 'save-status';
     saveStatus.textContent = '';
     saveStatus.style.display = 'none';
@@ -884,20 +938,31 @@ function setupEvents() {
   });
 
   btnSave.addEventListener('click', async () => {
+    const updated = collectForm();
+    const changed = changedDays(editBaseline, updated);
+    if (!changed.length) {
+      saveStatus.className = 'save-status ok';
+      saveStatus.textContent = 'Bez zmian — nic nie zapisano.';
+      saveStatus.style.display = 'flex';
+      setTimeout(closeEdit, 1200);
+      return;
+    }
+    // Dni, ktore ktos inny zmienil w bazie, gdy edytor byl otwarty.
+    const conflicts = conflictDays(editBaseline, daysData, changed);
     btnSave.disabled = true;
     btnSave.textContent = '⏳ Zapisuję...';
     // Przeladowanie na nowa wersje czeka, dopoki zapis sie nie skonczy - nawet
     // gdy ktos zamknie okno edycji, zanim baza odpowie.
     saveInFlight = true;
     try {
-      const updated = collectForm();
-      await saveData(updated);
-      daysData = updated;
-      renderDesktop();
-      renderMobile();
-      updateStatus();
+      await saveData(updated, changed);
+      daysData = daysData.map((day, i) => (changed.includes(i) ? updated[i] : day));
+      refreshViews();
+      editBaseline = updated;
       saveStatus.className = 'save-status ok';
-      saveStatus.textContent = '✅ Zapisano!';
+      saveStatus.textContent = conflicts.length
+        ? `✅ Zapisano. Uwaga: ${conflicts.map(dayNameLower).join(', ')} zmienił się w czasie edycji — w bazie jest teraz Twoja wersja.`
+        : '✅ Zapisano!';
       saveStatus.style.display = 'flex';
       setTimeout(closeEdit, 1200);
     } catch (err) {

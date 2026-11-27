@@ -268,12 +268,22 @@ body.dark-mode .empty { background: rgba(40,42,58,.6); border-color: #44475a; }
 .lesson-name { font-weight: bold; color: var(--text-main); font-size: 13px; }
 .lesson-room { font-size: 10px; color: var(--text-muted); font-weight: 700; }
 .lesson-empty { color: var(--text-muted); font-size: 13px; font-style: italic; }
+/* Pusty slot, na ktorym dziennik ma sprawdzian/zmiane planu: na telefonie
+   wiersz pojawia sie tylko dla znacznika (na desktopie znacznik jest na
+   pustym kafelku), wyciszony i bez kursora "kliknij". */
+.lesson-row-empty .lesson-info.empty { background: transparent; border-style: dashed; cursor: default; opacity: .8; }
+.lesson-row-empty .lesson-info.empty .lesson-name { font-weight: 600; color: var(--text-muted); }
 
 /* MODALS */
 .login-overlay, .edit-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
 .login-overlay.open, .edit-overlay.open { display: flex; }
 .login-box, .edit-box { background: var(--bg-modal); border: 2px solid var(--border-modal); border-radius: 16px; padding: 24px; max-width: 340px; width: 100%; box-shadow: 0 12px 40px rgba(0,0,0,.35); text-align: center; color: var(--text-main); }
 .edit-box { max-width: 680px; position: relative; text-align: left; }
+/* Edytor ma 10 lekcji x 5 dni (4Ta), wiec bez limitu wysokosci wiersze i
+   przyciski Zapisz/Anuluj ladowaly poza ekranem telefonu. Okno przewija sie
+   w srodku, a pasek akcji zostaje przy dolnej krawedzi. */
+.edit-overlay { align-items: flex-start; overflow-y: auto; }
+.edit-box { max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); overflow-y: auto; }
 .login-box h3, .edit-box h2 { margin: 0 0 16px; color: var(--text-header); }
 .login-box input, .edit-lesson-row select, .edit-lesson-row input[type=text] {
   width: 100%; padding: 9px; border-radius: 8px; border: 2px solid var(--border-input);
@@ -323,6 +333,8 @@ body.dark-mode .app-notice.err { background: #4a2222; color: #ffc2c2; border-col
 .empty-toggle { width: 32px; height: 32px; border-radius: 7px; border: 2px solid var(--border-input); background: var(--bg-input); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .empty-toggle.toggled { background: #ffe0e8; border-color: #e0a0b0; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+/* Pasek akcji zostaje widoczny przy przewijaniu dlugiego edytora. */
+.modal-actions { position: sticky; bottom: 0; background: var(--bg-modal); padding: 10px 0 2px; }
 .save-status { font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 8px; display: none; }
 .save-status.ok { display: flex; background: #d4edda; color: #2d6a4f; }
 .save-status.err { display: flex; background: #fce4e4; color: #8b1a1a; }
