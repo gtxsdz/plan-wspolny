@@ -293,7 +293,6 @@ function refreshOverlay() {
     dayMeta: DAY_META
   });
   overlayRefreshAt = nextOverlayRefreshAt(mins, dayEndMins);
-  renderLegend();
 }
 
 function overlaySlot(dayIndex, slotIndex) {
@@ -327,74 +326,10 @@ function changesPinsHtml(slot, dayIndex, slotIndex) {
   return `<button type="button" class="ov-pin ov-change" data-tip-day="${dayIndex}" data-tip-slot="${slotIndex}" title="${esc(label)}" aria-label="${esc(label)}">🔄${extra}</button>`;
 }
 
-// Kafelki na desktopie: male pieczatki w rogu (klik = dymek ze szczegolami).
+// Znaczniki (desktop i telefon): male pieczatki w rogu kafelka, klik = dymek.
 function overlayPinsHtml(slot, dayIndex, slotIndex) {
   const pins = examsPinsHtml(slot, dayIndex, slotIndex) + changesPinsHtml(slot, dayIndex, slotIndex);
   return pins ? `<div class="ov-pins">${pins}</div>` : '';
-}
-
-// Na telefonie pelnowidthowe paski pod lekcja - latwiejsze do trafienia niz rog kafelka.
-function overlayNotesHtml(slot, dayIndex, slotIndex) {
-  if (!slot) return '';
-  const out = [];
-  if (slot.exams.length) {
-    const first = slot.exams[0];
-    const extra = slot.exams.length > 1 ? ` +${slot.exams.length - 1}` : '';
-    out.push(`<button type="button" class="ov-line ov-exam" data-tip-day="${dayIndex}" data-tip-slot="${slotIndex}" aria-label="${esc(first.type || 'Sprawdzian')}: ${esc(first.subject)}, ${esc(shortDate(first.date))}">
-      <span class="ov-line-ico">${esc(examMarker(first.type))}</span>
-      <span class="ov-line-txt">${esc(first.type || 'Sprawdzian')} · ${esc(shortDate(first.date))}${esc(extra)}</span>
-    </button>`);
-  }
-  if (slot.changes.length) {
-    const first = slot.changes[0];
-    const extra = slot.changes.length > 1 ? ` +${slot.changes.length - 1}` : '';
-    out.push(`<button type="button" class="ov-line ov-change" data-tip-day="${dayIndex}" data-tip-slot="${slotIndex}" aria-label="Zmiana w planie: ${esc(first.subject)}, ${esc(shortDate(first.date))}">
-      <span class="ov-line-ico">🔄</span>
-      <span class="ov-line-txt">Zmiana w planie · ${esc(shortDate(first.date))}${esc(extra)}</span>
-    </button>`);
-  }
-  return out.join('');
-}
-
-function overlayUpdatedLabel() {
-  const ts = schoolOverlay?.updatedAt;
-  if (!ts) return '';
-  try {
-    const when = new Intl.DateTimeFormat('pl-PL', {
-      timeZone: 'Europe/Warsaw', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-    }).format(new Date(ts));
-    return ` · aktualizacja ${when}`;
-  } catch (e) {
-    return '';
-  }
-}
-
-function renderLegend() {
-  const el = document.getElementById('overlayLegend');
-  if (!el) return;
-  if (!schoolRaw) {
-    el.hidden = true;
-    el.innerHTML = '';
-    return;
-  }
-  const count = schoolOverlay?.count || { exams: 0, changes: 0 };
-  const range = schoolOverlay?.from && schoolOverlay?.to
-    ? (schoolOverlay.from === schoolOverlay.to
-      ? shortDate(schoolOverlay.from)
-      : `${shortDate(schoolOverlay.from)}–${shortDate(schoolOverlay.to)}`)
-    : '';
-  let html = '';
-  if (!count.exams && !count.changes) {
-    html = `<span class="ovl-empty">Brak sprawdzianów i zmian w planie${range ? ` (${esc(range)})` : ''}.</span>`;
-  } else {
-    const keys = [];
-    if (count.exams) keys.push('📝 sprawdzian · ✏️ kartkówka');
-    if (count.changes) keys.push('🔄 zmiana w planie');
-    html = `<span class="ovl-keys">${keys.join(' · ')} — dotknij znacznika, aby zobaczyć szczegóły</span>`;
-    if (range) html += `<span class="ovl-range">Z dziennika · ${esc(range)}${esc(overlayUpdatedLabel())}</span>`;
-  }
-  el.innerHTML = html;
-  el.hidden = false;
 }
 
 function openTip(dayIndex, slotIndex) {
@@ -519,27 +454,23 @@ function renderMobile() {
     const lc = document.createElement('div');
     lc.className = 'lessons-container';
     day.lessons.forEach((l, li) => {
-      const slotOverlay = overlaySlot(di, li);
-      // Pusta lekcja bez znacznikow nie zajmuje miejsca; ze sprawdzianem/zmiana
-      // pokazujemy sam pasek przy numerze lekcji (inaczej informacja by znikla).
-      if ((!l || l.empty) && !slotOverlay) return;
+      if (!l || l.empty) return;
       const t = TIMES[li];
+      const slotOverlay = overlaySlot(di, li);
       const row = document.createElement('div');
       row.className = 'lesson-row';
       row.dataset.lessonIndex = li;
+      const info = document.createElement('div');
+      info.className = 'lesson-info';
+      info.dataset.subject = subjectKey(l);
+      info.setAttribute('role', 'button');
+      info.setAttribute('tabindex', '0');
+      info.setAttribute('aria-pressed', 'false');
+      info.innerHTML = `<div class="lesson-content"><span class="lesson-icon">${esc(l.icon)}</span><div class="lesson-name">${esc(l.name)}</div><div class="lesson-room">${esc(l.room)}</div></div>`;
       const main = document.createElement('div');
       main.className = 'lesson-main';
-      if (l && !l.empty) {
-        const info = document.createElement('div');
-        info.className = 'lesson-info';
-        info.dataset.subject = subjectKey(l);
-        info.setAttribute('role', 'button');
-        info.setAttribute('tabindex', '0');
-        info.setAttribute('aria-pressed', 'false');
-        info.innerHTML = `<div class="lesson-content"><span class="lesson-icon">${esc(l.icon)}</span><div class="lesson-name">${esc(l.name)}</div><div class="lesson-room">${esc(l.room)}</div></div>`;
-        main.appendChild(info);
-      }
-      main.insertAdjacentHTML('beforeend', overlayNotesHtml(slotOverlay, di, li));
+      main.appendChild(info);
+      main.insertAdjacentHTML('beforeend', overlayPinsHtml(slotOverlay, di, li));
       row.innerHTML = `<div class="lesson-time"><span class="bell">🔔</span><span class="no">${esc(t.num)}</span><span class="time">${esc(t.dTime)}</span></div>`;
       row.appendChild(main);
       lc.appendChild(row);
