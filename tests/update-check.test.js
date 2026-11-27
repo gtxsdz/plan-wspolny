@@ -8,8 +8,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CHECK_INTERVAL_MS,
+  LOAD_SLACK_MS,
   parseVersion,
   isStale,
+  isBuildAfter,
+  needsReload,
   shouldCheck,
   reloadHref,
   versionLabel
@@ -66,3 +69,42 @@ test('versionLabel pokazuje krotki skrot commita, a bez niego date wdrozenia', (
   assert.equal(versionLabel({ sha: '', built: '2026-11-27T10:00:00Z' }), '2026-11-27T10:00:00Z');
   assert.equal(versionLabel(null), '');
 });
+
+const LOADED_AT = Date.parse('2026-11-27T12:00:00Z');
+const remote = (sha, built = '2026-11-27T11:00:00Z') => ({ sha, built });
+const reloadArgs = (over = {}) => ({ seen: null, remote: remote('bbb'), loadedAt: LOADED_AT, reloadedFor: null, ...over });
+
+test('needsReload: znana wersja rozna od serwerowej wymaga przeladowania', () => {
+  assert.equal(needsReload(reloadArgs({ seen: 'aaa' })), true);
+  assert.equal(needsReload(reloadArgs({ seen: 'bbb' })), false);
+});
+
+test('needsReload: karta bez znanej wersji porownuje czas wdrozenia z wczytaniem', () => {
+  // wdrozenie 20 min po wczytaniu strony - karta na pewno jest stara
+  assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T12:20:00Z') })), true);
+  // wdrozenie tuz przed wczytaniem - to ta sama wersja
+  assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T11:59:00Z') })), false);
+  // w granicach zapasu na zegar telefonu nie przeladowujemy
+  assert.equal(needsReload(reloadArgs({ remote: remote('bbb', '2026-11-27T12:05:00Z') })), false);
+});
+
+test('needsReload: blokada petli, brak danych i smieci', () => {
+  assert.equal(needsReload(reloadArgs({ seen: 'aaa', reloadedFor: 'bbb' })), false, 'druga proba tej samej wersji');
+  assert.equal(needsReload(reloadArgs({ seen: 'aaa', reloadedFor: 'ccc' })), true);
+  assert.equal(needsReload(), false);
+  assert.equal(needsReload({ seen: 'aaa', remote: null, loadedAt: LOADED_AT }), false);
+  assert.equal(needsReload({ seen: 'aaa', remote: { built: 'x' }, loadedAt: LOADED_AT }), false);
+  assert.equal(needsReload(reloadArgs({ remote: remote('bbb', 'nie-data') })), false);
+  assert.equal(needsReload(reloadArgs({ loadedAt: Number.NaN })), false);
+});
+
+test('isBuildAfter: zapas na zegar i odpornosc na brak daty', () => {
+  assert.equal(LOAD_SLACK_MS, 10 * 60 * 1000, 'zapas ma chronic przed zegarem telefonu');
+  assert.equal(isBuildAfter({ built: '2026-11-27T12:30:00Z' }, LOADED_AT), true);
+  assert.equal(isBuildAfter({ built: '2026-11-27T12:05:00Z' }, LOADED_AT), false);
+  assert.equal(isBuildAfter({ built: '2026-11-27T12:05:00Z' }, LOADED_AT, 0), true);
+  assert.equal(isBuildAfter({ built: '' }, LOADED_AT), false);
+  assert.equal(isBuildAfter({}, LOADED_AT), false);
+  assert.equal(isBuildAfter({ built: '2026-11-27T12:30:00Z' }, null), false);
+});
+
