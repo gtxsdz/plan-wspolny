@@ -18,7 +18,7 @@ import {
   conflictDays,
   mobileSlotIndexes,
   journalDayEndMins,
-  overlaySlotEndMins,
+  overlaySlotEnds,
   dayTimeRange,
   subjectOptionsFor,
   activeBadge,
@@ -518,10 +518,12 @@ test('zmiana przeniesiona na pozniejsza lekcje zyje do konca lekcji docelowej', 
   assert.equal(journalDayEndMins(raw, '2026-12-07', TIMES), TIMES[TIMES.length - 1].e);
 });
 
-test('overlaySlotEndMins: przeniesiona lekcja trzyma wpis do konca lekcji docelowej', () => {
-  const slot = { exams: [], changes: [{ lesson: 1, newLesson: 3 }] };
-  assert.equal(overlaySlotEndMins(slot, 0, TIMES), TIMES[2].e);
-  assert.equal(overlaySlotEndMins({ exams: [], changes: [] }, 0, TIMES), TIMES[0].e);
-  assert.equal(overlaySlotEndMins(null, 0, TIMES), 0);
-  assert.equal(overlaySlotEndMins({ changes: [{ newLesson: 99 }] }, 1, TIMES), TIMES[1].e, 'lekcja poza slotami ignorowana');
+test('overlaySlotEnds: kazdy wpis swoj koniec, do przeliczenia bierzemy najblizszy', () => {
+  const slot = { exams: [{ lesson: 1 }], changes: [{ lesson: 1, newLesson: 3 }] };
+  assert.deepEqual(overlaySlotEnds(slot, 0, TIMES), [TIMES[0].e, TIMES[2].e]);
+  assert.equal(Math.min(...overlaySlotEnds(slot, 0, TIMES)), TIMES[0].e, 'sprawdzian wygasa pierwszy');
+  assert.deepEqual(overlaySlotEnds({ exams: [], changes: [] }, 0, TIMES), []);
+  assert.deepEqual(overlaySlotEnds(null, 0, TIMES), []);
+  assert.deepEqual(overlaySlotEnds({ changes: [{ newLesson: 99 }] }, 1, TIMES), [TIMES[1].e], 'lekcja poza slotami ignorowana');
+  assert.deepEqual(overlaySlotEnds({ changes: [{ newLesson: 1 }] }, 0, TIMES), [TIMES[0].e], 'bez przeniesienia - koniec wlasnej lekcji');
 });
