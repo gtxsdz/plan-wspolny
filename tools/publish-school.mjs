@@ -144,6 +144,19 @@ function readRows(cfg, account, pupilId, todayIso) {
   }
 }
 
+// Plan tygodniowy zapisany w bazie (odczyt publiczny) - do przypisania lekcji.
+async function readStoredDays(databaseURL) {
+  if (!databaseURL) return null;
+  try {
+    const url = `${String(databaseURL).replace(/\/$/, '')}/schedule/days.json`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
 function accessToken() {
   const fromEnv = String(process.env.FIREBASE_ACCESS_TOKEN || '').trim();
   if (fromEnv) return fromEnv;
@@ -202,9 +215,13 @@ async function main() {
     try {
       if (!pupilId) throw new Error(`brak konta "${account}" w accounts.json`);
       const rows = readRows(cfg, account, pupilId, todayIso);
+      // Aktualny plan tygodniowy z bazy: administrator mogl przeniesc przedmiot
+      // na inna godzine, wiec sprawdzian trzeba przypiac do lekcji z bazy,
+      // a nie z planu wbudowanego w aplikacje.
+      const weeklyDays = await readStoredDays(cfg.firebaseConfig.databaseURL);
       const { payload, warnings, counts } = buildSchoolPayload({
         cfg, account, todayIso, horizonDays: HORIZON_DAYS,
-        exams: rows.exams, changes: rows.changes, planRows: rows.planRows
+        exams: rows.exams, changes: rows.changes, planRows: rows.planRows, weeklyDays
       });
       if (!opts.quiet) {
         warnings.forEach((w) => console.error(`[${cfg.id}] uwaga: ${w}`));

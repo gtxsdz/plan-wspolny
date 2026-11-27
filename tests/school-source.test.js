@@ -153,3 +153,17 @@ test('buildSchoolPayload: dluga nazwa 4Ta dopasowuje lekcje, choc do planu idzie
   assert.equal(payload.exams.d1?.lesson, 3, 'lekcja znaleziona po pelnej nazwie');
   assert.equal(payload.exams.d1.subject, long.slice(0, 40), 'w planie zostaje nazwa w limicie');
 });
+
+test('buildSchoolPayload: sprawdzian trafia na lekcje z planu w bazie, nie z wbudowanego', () => {
+  // w bazie WF przeniesiony z 5. na 2. lekcje poniedzialku
+  const weeklyDays = [{ lessons: [{ name: 'j. polski', room: '1' }, { name: 'wf', room: 'sala' }] }];
+  const base = { cfg: CLASS_5A, account: 'katarzyna', todayIso: '2026-11-27', horizonDays: 21, changes: [], planRows: [] };
+  const exam = { id: 'wf1', date: '2026-11-30', subject: 'Wychowanie fizyczne', type: 'Sprawdzian', raw: '{"Subject":{"Kod":"wf"}}' };
+  const withDb = buildSchoolPayload({ ...base, exams: [exam], weeklyDays });
+  const withoutDb = buildSchoolPayload({ ...base, exams: [exam] });
+  assert.equal(withDb.payload.exams.wf1.lesson, 2, 'lekcja z aktualnego planu');
+  assert.equal(withoutDb.payload.exams.wf1.lesson, 5, 'bez planu z bazy - wbudowany');
+  // obiekt z kluczami jak z RTDB tez jest rozumiany
+  const sparse = buildSchoolPayload({ ...base, exams: [exam], weeklyDays: { 0: weeklyDays[0] } });
+  assert.equal(sparse.payload.exams.wf1.lesson, 2);
+});
