@@ -936,6 +936,9 @@ function setupEvents() {
   };
   const scheduleCloseEdit = () => {
     if (editCloseTimer) clearTimeout(editCloseTimer);
+    // Zamkniecie nastapi za 1,2 s - w tym czasie formularz jest zablokowany,
+    // zeby wpisane wlasnie zmiany nie zginely przy domknieciu.
+    setEditorBusy(true);
     editCloseTimer = setTimeout(closeEdit, 1200);
   };
   document.getElementById('editClose').addEventListener('click', closeEdit);
@@ -944,8 +947,18 @@ function setupEvents() {
 
   // Na czas zapisu blokujemy wszystkie pola formularza: zmiany wpisane po
   // kliknieciu Zapisz nie zmiescilyby sie w wyslanej kopii i zginelyby.
+  // Po odblokowaniu wiersze oznaczone jako puste nadal trzymaja wylaczone
+  // pola przedmiotu/sali (wybranie ich i tak zostalo by zapisane jako puste).
   const setEditorBusy = (busy) => {
-    editOverlay.querySelectorAll('.es, .er, .empty-toggle, .tab-btn').forEach(el => {
+    editOverlay.querySelectorAll('.edit-lesson-row').forEach(row => {
+      const emptyRow = row.classList.contains('is-empty');
+      row.querySelectorAll('.es, .er').forEach(el => {
+        el.disabled = busy || emptyRow;
+      });
+      const toggle = row.querySelector('.empty-toggle');
+      if (toggle) toggle.disabled = busy;
+    });
+    editOverlay.querySelectorAll('.tab-btn').forEach(el => {
       el.disabled = busy;
     });
   };
